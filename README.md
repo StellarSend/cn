@@ -1,35 +1,21 @@
-# SoroProtocol App
+# shadcn/ui monorepo template
 
-Next.js dashboard for creating and managing payment streams on Stellar.
+This is a TanStack Start monorepo template with shadcn/ui.
 
-## Features
+## Adding components
 
-- Connect Freighter wallet
-- Create, view, and cancel payment streams
-- Real-time balance counter (updates every 200ms)
-- Vesting schedule management
-- Dark / light mode
-
-## Getting Started
+To add components to your app, run the following command at the root of your `web` app:
 
 ```bash
-npm install
-cp .env.example .env.local
-# Fill in contract IDs in .env.local
-npm run dev
+pnpm dlx shadcn@latest add button -c apps/web
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+This will place the ui components in the `packages/ui/src/components` directory.
 
-## Environment Variables
+## Using components
 
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_NETWORK` | `testnet` or `mainnet` |
-| `NEXT_PUBLIC_STREAM_CONTRACT_ID` | Deployed stream contract ID |
-| `NEXT_PUBLIC_VESTING_CONTRACT_ID` | Deployed vesting contract ID |
-| `NEXT_PUBLIC_API_URL` | Backend API URL |
+To use the components in your app, import them from the `ui` package.
 
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+```tsx
+import { Button } from "@workspace/ui/components/button";
+```
