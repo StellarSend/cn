@@ -1,5 +1,4 @@
 import { cn } from "@workspace/ui/lib/utils"
-import { formatUsd } from "@/shared/lib/format"
 
 type DistributionRow = {
   epoch: string
@@ -40,7 +39,14 @@ function StatusBadge({ status }: { status: DistributionRow["status"] }) {
   )
 }
 
-
+function fmtUsd(v: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v)
+}
 
 function InfoCard() {
   return (
@@ -99,7 +105,7 @@ export function DistributionsTab() {
                   >
                     <td className="px-5 py-3.5 font-mono text-muted-foreground">{row.epoch}</td>
                     <td className="px-5 py-3.5 text-muted-foreground">{row.date}</td>
-                    <td className="px-5 py-3.5 text-right font-mono">{formatUsd(row.amountUsd)}</td>
+                    <td className="px-5 py-3.5 text-right font-mono">{fmtUsd(row.amountUsd)}</td>
                     <td className="px-5 py-3.5 font-mono">{row.token}</td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={row.status} />

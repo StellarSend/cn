@@ -1,6 +1,5 @@
 import { usePriceDelta24h } from "../../hooks/usePriceDelta24h"
 import { useTokenPrices } from "../../hooks/useTokenPrices"
-import { formatUsd } from "@/shared/lib/format"
 import { MarketSelector } from "./MarketSelector"
 
 type Props = {
@@ -27,7 +26,7 @@ export function ChartHeader({ symbol, onSelectToken }: Props) {
       <div className="flex flex-col">
         <span className="text-xs text-muted-foreground">Price</span>
         <span className="font-mono font-medium">
-          {midPrice > 0 ? formatUsd(midPrice, { decimals: 4 }) : "—"}
+          {midPrice > 0 ? `$${midPrice.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : "—"}
         </span>
       </div>
 
@@ -51,7 +50,7 @@ export function ChartHeader({ symbol, onSelectToken }: Props) {
       <div className="flex flex-col">
         <span className="text-xs text-muted-foreground">24h High</span>
         <span className="font-mono">
-          {delta?.high ? formatUsd(delta.high, { decimals: 2 }) : "—"}
+          {delta?.high ? `$${delta.high.toLocaleString()}` : "—"}
         </span>
       </div>
 
@@ -59,7 +58,7 @@ export function ChartHeader({ symbol, onSelectToken }: Props) {
       <div className="flex flex-col">
         <span className="text-xs text-muted-foreground">24h Low</span>
         <span className="font-mono">
-          {delta?.low ? formatUsd(delta.low, { decimals: 2 }) : "—"}
+          {delta?.low ? `$${delta.low.toLocaleString()}` : "—"}
         </span>
       </div>
     </div>

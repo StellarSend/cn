@@ -3,9 +3,15 @@ import { Button } from "@workspace/ui/components/button"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { useEarnStats } from "../../hooks/use-earn-data"
 import { claimRewards } from "../../lib/earn"
-import { formatUsd, formatPct } from "@/shared/lib/format"
 
-
+function fmtUsd(v: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v)
+}
 
 function StatItem({
   label,
@@ -116,7 +122,7 @@ export function RewardsBar() {
       <div className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border border-border bg-card px-6 py-4">
         <StatItem
           label="Total investment value"
-          value={formatUsd(stats?.totalInvestmentUsd ?? 0)}
+          value={fmtUsd(stats?.totalInvestmentUsd ?? 0)}
           isLoading={isLoading}
         />
 
@@ -124,7 +130,7 @@ export function RewardsBar() {
 
         <StatItem
           label="Total earned"
-          value={formatUsd(stats?.totalEarnedUsd ?? 0)}
+          value={fmtUsd(stats?.totalEarnedUsd ?? 0)}
           isLoading={isLoading}
         />
 
@@ -132,7 +138,7 @@ export function RewardsBar() {
 
         <StatItem
           label="Total pending rewards"
-          value={formatUsd(stats?.totalPendingRewardsUsd ?? 0)}
+          value={fmtUsd(stats?.totalPendingRewardsUsd ?? 0)}
           isLoading={isLoading}
         />
 
@@ -140,7 +146,7 @@ export function RewardsBar() {
 
         <StatItem
           label="Staking Power Share"
-          value={formatPct(stats?.stakingPowerSharePct ?? 0, { sign: false })}
+          value={`${(stats?.stakingPowerSharePct ?? 0).toFixed(2)}%`}
           isLoading={isLoading}
         />
 

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { cn } from "@workspace/ui/lib/utils"
 import { CodeDisplay } from "./shared/code-display"
 import { FaqAccordion, type FaqItem } from "./shared/faq-accordion"
