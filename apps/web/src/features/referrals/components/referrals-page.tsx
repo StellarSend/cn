@@ -1,9 +1,7 @@
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Navbar } from "../../../ui/Navbar"
-import { useTraderStats } from "../hooks/use-referrals-data"
-import { useReferralCode } from "../queries/useReferralCode"
-import { useReferralTier } from "../queries/useReferralTier"
+import { useAffiliateStats, useTraderStats } from "../hooks/use-referrals-data"
 import { TradersTab } from "./traders/traders-tab"
 import { AffiliatesTab } from "./affiliates/affiliates-tab"
 import { DistributionsTab } from "./distributions/distributions-tab"
@@ -34,11 +32,10 @@ export function ReferralsPage() {
   const [tab, setTab] = useState<ReferralsTab>("traders")
 
   const { data: traderStats } = useTraderStats()
-  const { data: affiliateCodeData } = useReferralCode()
-  const { data: affiliateTier } = useReferralTier()
+  const { data: affiliateStats } = useAffiliateStats()
 
   const traderCode = traderStats?.referralCode ?? null
-  const affiliateCode = affiliateCodeData ?? null
+  const affiliateCode = affiliateStats?.code ?? null
   const hasAffiliateCode = Boolean(affiliateCode)
 
   return (
@@ -93,7 +90,7 @@ export function ReferralsPage() {
               traderCode={traderCode}
               affiliateCode={affiliateCode}
               traderDiscountPct={traderStats?.discountPct ?? 5}
-              affiliateTier={affiliateTier ?? 1}
+              affiliateTier={affiliateStats?.tier ?? 1}
             />
           </div>
         </Tabs>

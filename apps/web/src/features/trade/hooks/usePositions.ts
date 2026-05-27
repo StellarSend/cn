@@ -73,7 +73,6 @@ export function usePositions() {
     queryFn: () => fetchPositions(account!),
     enabled: !!account,
     staleTime: 10_000,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
+    refetchInterval: 15_000,
   })
 }

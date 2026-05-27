@@ -5,8 +5,6 @@ import { usePoolsApy } from "../../hooks/use-earn-data"
 import { depositGLV, depositGM } from "../../lib/earn"
 import { formatPct, formatUsd } from "@/shared/lib/format"
 import { useMarketPoolAmounts } from "../../hooks/useMarketPoolAmounts"
-import { useGLVVaultData, useGMPoolData } from "../../queries"
-import { fromSorobanAmount } from "@/shared/lib/bignum"
 
 type Filter = "all" | "glv" | "gm"
 type SortKey = "apy" | "tvl"
@@ -101,7 +99,6 @@ export function DiscoverTab() {
       ...glvVaults.map((v) => ({
         id: v.id,
         marketAddress: "",
-        vaultAddress: v.id,
         name: `${v.name} [${v.displayPair}]`,
         kind: "glv" as const,
         longToken: "GLV",
@@ -113,7 +110,6 @@ export function DiscoverTab() {
       ...gmPools.map((p) => ({
         id: p.id,
         marketAddress: p.marketAddress,
-        vaultAddress: "",
         name: p.name,
         kind: "gm" as const,
         longToken: p.longToken,
@@ -178,7 +174,6 @@ export function DiscoverTab() {
                 <th className="px-5 py-3 font-medium text-muted-foreground">Type</th>
                 <th className="px-5 py-3 text-right font-medium text-muted-foreground">APY</th>
                 <th className="px-5 py-3 text-right font-medium text-muted-foreground">TVL</th>
-                <th className="px-5 py-3 text-right font-medium text-muted-foreground">Position</th>
                 <th className="px-5 py-3 font-medium text-muted-foreground">Composition</th>
                 <th className="px-5 py-3 text-right font-medium text-muted-foreground">Action</th>
               </tr>
@@ -225,7 +220,6 @@ function DiscoverRow({
   row: {
     id: string
     marketAddress: string
-    vaultAddress: string
     name: string
     kind: "glv" | "gm"
     longToken: string
@@ -239,16 +233,7 @@ function DiscoverRow({
   onEarn: (id: string, kind: "gm" | "glv", name: string) => Promise<void>
 }) {
   const { data: poolAmounts } = useMarketPoolAmounts(row.marketAddress)
-  const { data: gmPoolData } = useGMPoolData(row.marketAddress)
-  const { data: glvVaultData } = useGLVVaultData(row.vaultAddress)
-  const liveData = row.kind === "gm" ? gmPoolData : glvVaultData
-  const tvl = row.kind === "gm" ? (poolAmounts?.poolValueUsd ?? liveData?.tvlUsd ?? row.tvlUsd) : (liveData?.tvlUsd ?? row.tvlUsd)
-  const apy = liveData?.apr ?? row.apy
-  const longPct = row.kind === "gm" ? (gmPoolData?.longPct ?? row.longPct) : row.longPct
-  const shortPct = row.kind === "gm" ? (gmPoolData?.shortPct ?? row.shortPct) : row.shortPct
-  const userBalance = row.kind === "gm"
-    ? fromSorobanAmount(gmPoolData?.userGmBalance ?? 0n, 7)
-    : fromSorobanAmount(glvVaultData?.userGlvBalance ?? 0n, 7)
+  const tvl = row.kind === "gm" ? (poolAmounts?.poolValueUsd ?? row.tvlUsd) : row.tvlUsd
 
   return (
     <tr className={cn("transition-colors hover:bg-muted/20", !isLast && "border-b border-border/40")}>
@@ -271,17 +256,14 @@ function DiscoverRow({
         </span>
       </td>
       <td className="px-5 py-4 text-right">
-        <span className="font-mono font-semibold text-green-400">{formatPct(apy, { sign: false })}</span>
+        <span className="font-mono font-semibold text-green-400">{formatPct(row.apy, { sign: false })}</span>
       </td>
       <td className="px-5 py-4 text-right font-mono text-muted-foreground">
         {formatUsd(tvl, { compact: true })}
       </td>
-      <td className="px-5 py-4 text-right font-mono text-muted-foreground">
-        {userBalance > 0 ? userBalance.toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0"}
-      </td>
       <td className="px-5 py-4">
-        {longPct !== undefined ? (
-          <PoolCompositionBar longPct={longPct} shortPct={shortPct ?? 0} />
+        {row.longPct !== undefined ? (
+          <PoolCompositionBar longPct={row.longPct} shortPct={row.shortPct ?? 0} />
         ) : (
           <span className="text-[11px] text-muted-foreground">Diversified</span>
         )}
