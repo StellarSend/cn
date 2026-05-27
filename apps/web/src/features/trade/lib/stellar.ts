@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { formatUsd } from "@/shared/lib/format"
 import { explorerTxUrl, NETWORK } from "@/app/config/network"
 import { queryClient } from "@/app/providers/QueryProvider"
+import { MARKETS } from "../data/markets"
 import {
   buildCreateOrderTransaction,
   buildCancelOrderTransaction,
@@ -143,24 +144,73 @@ export async function createDecreaseOrder(params: DecreaseOrderParams): Promise<
 
 /** Swap one token for another */
 export async function createSwapOrder(params: SwapOrderParams): Promise<string> {
+  if (!isValidAccount(params.account)) {
+    throw new Error("Connect your wallet before placing an order.")
+  }
+
+  const knownMarketAddresses = new Set(MARKETS.map((m) => m.address))
+  const invalidPools = params.swapPath.filter((addr) => !knownMarketAddresses.has(addr))
+  if (invalidPools.length > 0) {
+    throw new Error(`Invalid swap path: unknown pool address(es): ${invalidPools.join(", ")}`)
+  }
+
   const toastId = toast.loading(`Swapping ${params.fromToken} → ${params.toToken}…`)
-  await fakeTxDelay()
 
-  toast.success(`Swap submitted`, {
-    id: toastId,
-    description: `${params.amountIn} ${params.fromToken} → ${params.minAmountOut} ${params.toToken} (not real)`,
-  })
+  try {
+    const contractParams = toSwapOrderParams(params)
+    const tx = await buildSwapOrderTransaction(contractParams)
+    const signedXdr = await prepareAndSign(tx, walletKit, NETWORK.networkPassphrase)
+    const { hash } = await sendAndPoll(signedXdr)
 
-  return "DUMMY_TX_HASH"
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.tokenBalances(CHAIN_ID, params.account),
+    })
+
+    toast.success(`Swap submitted`, {
+      id: toastId,
+      description: `${params.amountIn} ${params.fromToken} → ${params.minAmountOut} ${params.toToken} | Tx: ${hash.slice(0, 8)}…`,
+      action: {
+        label: "View on Stellar Expert",
+        onClick: () => window.open(explorerTxUrl(hash), "_blank", "noopener,noreferrer"),
+      },
+    })
+
+    return hash
+  } catch (error) {
+    toast.error(parseSorobanError(error), { id: toastId })
+    throw error
+  }
 }
 
 /** Cancel a pending limit/trigger order */
-export async function cancelOrder(_account: string, _orderKey: string): Promise<string> {
-  const toastId = toast.loading("Cancelling order…")
-  await fakeTxDelay(800)
+export async function cancelOrder(account: string, orderKey: OrderKey): Promise<string> {
+  if (!isValidAccount(account)) {
+    throw new Error("Connect your wallet before cancelling an order.")
+  }
 
-  toast.success("Order cancelled", { id: toastId })
-  return "DUMMY_TX_HASH"
+  const toastId = toast.loading("Cancelling order…")
+
+  try {
+    const tx = await buildCancelOrderTransaction(account, orderKey)
+    const signedXdr = await prepareAndSign(tx, walletKit, NETWORK.networkPassphrase)
+    const { hash } = await sendAndPoll(signedXdr)
+
+    await queryClient.invalidateQueries({ queryKey: queryKeys.orders(CHAIN_ID, account) })
+
+    toast.success("Order cancelled", {
+      id: toastId,
+      description: `Tx: ${hash.slice(0, 8)}…`,
+      action: {
+        label: "View on Stellar Expert",
+        onClick: () => window.open(explorerTxUrl(hash), "_blank", "noopener,noreferrer"),
+      },
+    })
+
+    return hash
+  } catch (error) {
+    toast.error(parseSorobanError(error), { id: toastId })
+    throw error
+  }
 }
 
 /** Claim accrued funding fees */
@@ -179,19 +229,58 @@ export async function claimFundingFees(
 
 export type BatchOrderParams = {
   createOrders?: Array<IncreaseOrderParams>
-  cancelOrderKeys?: Array<string>
+  cancelOrderKeys?: Array<OrderKey>
 }
 
 export async function sendBatchOrderTxn(
-  _account: string,
+  account: string,
   params: BatchOrderParams,
 ): Promise<string> {
-  const toastId = toast.loading(
-    `Submitting batch (${(params.createOrders?.length ?? 0) + (params.cancelOrderKeys?.length ?? 0)} operations)…`,
-  )
-  await fakeTxDelay()
-  toast.success("Batch order submitted", { id: toastId, description: "Tx: DUMMY (not real)" })
-  return "DUMMY_BATCH_TX_HASH"
+  if (!isValidAccount(account)) {
+    throw new Error("Connect your wallet before submitting a batch order.")
+  }
+
+  const opCount = (params.createOrders?.length ?? 0) + (params.cancelOrderKeys?.length ?? 0)
+  if (opCount === 0) {
+    throw new Error("Batch order must contain at least one operation.")
+  }
+
+  const toastId = toast.loading(`Submitting batch (${opCount} operations)…`)
+
+  try {
+    const operations: Array<BatchOperation> = [
+      ...(params.createOrders ?? []).map((p) => ({
+        actionType: "createOrder" as const,
+        orderParams: toCreateOrderParams(p),
+        cancelKey: null,
+      })),
+      ...(params.cancelOrderKeys ?? []).map((key) => ({
+        actionType: "cancelOrder" as const,
+        orderParams: null,
+        cancelKey: key,
+      })),
+    ]
+
+    const tx = await buildBatchOrderTransaction(account, operations)
+    const signedXdr = await prepareAndSign(tx, walletKit, NETWORK.networkPassphrase)
+    const { hash } = await sendAndPoll(signedXdr)
+
+    await invalidateTradeQueries(account)
+
+    toast.success("Batch order submitted", {
+      id: toastId,
+      description: `${opCount} operations | Tx: ${hash.slice(0, 8)}…`,
+      action: {
+        label: "View on Stellar Expert",
+        onClick: () => window.open(explorerTxUrl(hash), "_blank", "noopener,noreferrer"),
+      },
+    })
+
+    return hash
+  } catch (error) {
+    toast.error(parseSorobanError(error), { id: toastId })
+    throw error
+  }
 }
 
 export type SidecarOrderParams = {
