@@ -89,6 +89,26 @@ async function buildStakingTransaction(
   return rpc.assembleTransaction(tx, simulation).build()
 }
 
+async function buildClaimRewardsTx(account: string): Promise<Transaction> {
+  const sourceAccount = await sorobanRpc.getAccount(account)
+  const contract = new Contract(CONTRACTS.stakingRouter)
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100",
+    networkPassphrase: NETWORK.networkPassphrase,
+  })
+    .addOperation(contract.call("claimRewards", xdr.ScVal.scvString(account)))
+    .setTimeout(180)
+    .build()
+
+  const simulation = await sorobanRpc.simulateTransaction(tx)
+  if (rpc.Api.isSimulationError(simulation)) {
+    throw new Error(`Transaction simulation failed: ${simulation.error}`)
+  }
+
+  return rpc.assembleTransaction(tx, simulation).build()
+}
+
 /** Build a fee-assembled Soroban transaction calling StakingRouter.stakeSO4. */
 export function buildStakeSO4Transaction(account: string, amount: bigint): Promise<Transaction> {
   return buildStakingTransaction(account, "stakeSO4", amount)
@@ -97,4 +117,9 @@ export function buildStakeSO4Transaction(account: string, amount: bigint): Promi
 /** Build a fee-assembled Soroban transaction calling StakingRouter.unstakeSO4. */
 export function buildUnstakeSO4Transaction(account: string, amount: bigint): Promise<Transaction> {
   return buildStakingTransaction(account, "unstakeSO4", amount)
+}
+
+/** Build a fee-assembled Soroban transaction calling StakingRouter.claimRewards. */
+export function buildClaimRewardsTransaction(account: string): Promise<Transaction> {
+  return buildClaimRewardsTx(account)
 }

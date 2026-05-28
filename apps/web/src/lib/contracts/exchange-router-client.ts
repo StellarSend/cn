@@ -129,6 +129,12 @@ export type CreateDepositParams = {
   shortTokenAmount: bigint
 }
 
+export type CreateWithdrawalParams = {
+  account: string
+  market: string
+  gmAmount: bigint
+}
+
 /**
  * Build a fee-assembled Soroban transaction calling ExchangeRouter.createDeposit.
  * Returns both the assembled transaction and the simulated GM tokens to receive
@@ -171,6 +177,65 @@ export async function buildCreateDepositTransaction(
   }
 
   return { tx: rpc.assembleTransaction(tx, simulation).build(), expectedGm }
+}
+
+export async function buildCreateWithdrawalTransaction(
+  params: CreateWithdrawalParams,
+): Promise<{ tx: Transaction; expectedLongTokens: bigint | null; expectedShortTokens: bigint | null }> {
+  const sourceAccount = await sorobanRpc.getAccount(params.account)
+  const contract = new Contract(CONTRACTS.exchangeRouter)
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100",
+    networkPassphrase: NETWORK.networkPassphrase,
+  })
+    .addOperation(
+      contract.call(
+        "createWithdrawal",
+        xdr.ScVal.scvString(params.market),
+        xdr.ScVal.scvString(params.gmAmount.toString()),
+      ),
+    )
+    .setTimeout(180)
+    .build()
+
+  const simulation = await sorobanRpc.simulateTransaction(tx)
+  if (rpc.Api.isSimulationError(simulation)) {
+    throw new Error(`Withdrawal simulation failed: ${simulation.error}`)
+  }
+
+  let expectedLongTokens: bigint | null = null
+  let expectedShortTokens: bigint | null = null
+  const retval = simulation.result?.retval
+  if (retval) {
+    const native = scValToNative(retval) as unknown
+    const normalized = native as Record<string, unknown>
+
+    const parseBigint = (value: unknown): bigint | null => {
+      if (typeof value === "bigint") return value
+      if (typeof value === "number") return BigInt(value)
+      if (typeof value === "string") return BigInt(value)
+      return null
+    }
+
+    if (Array.isArray(native)) {
+      expectedLongTokens = parseBigint(native[0])
+      expectedShortTokens = parseBigint(native[1])
+    } else if (native && typeof native === "object") {
+      expectedLongTokens =
+        parseBigint((normalized as any).long_amount ?? (normalized as any).long ?? (normalized as any)[0])
+      expectedShortTokens =
+        parseBigint((normalized as any).short_amount ?? (normalized as any).short ?? (normalized as any)[1])
+    } else {
+      expectedLongTokens = parseBigint(native)
+    }
+  }
+
+  return {
+    tx: rpc.assembleTransaction(tx, simulation).build(),
+    expectedLongTokens,
+    expectedShortTokens,
+  }
 }
 
 export async function buildBatchOrderTransaction(

@@ -10,12 +10,21 @@ import { toSorobanAmount } from "@/shared/lib/bignum"
 import {
   buildStakeSO4Transaction,
   buildUnstakeSO4Transaction,
+  buildClaimRewardsTransaction,
 } from "@/lib/contracts/staking-router"
-import { buildCreateDepositTransaction } from "@/lib/contracts/exchange-router-client"
-import { GM_POOLS } from "../data/pools"
+import {
+  buildCreateDepositTransaction,
+  buildCreateWithdrawalTransaction,
+} from "@/lib/contracts/exchange-router-client"
+import {
+  createDeposit as createGlvDeposit,
+  createWithdrawal as createGlvWithdrawal,
+} from "@/lib/contracts/glv-router-client"
+import { GM_POOLS, GLV_VAULTS } from "../data/pools"
 
 const SO4_DECIMALS = 7
 const GM_TOKEN_DECIMALS = 7
+const GLV_TOKEN_DECIMALS = 7
 
 function fakeTxDelay(ms = 1500): Promise<void> {
   return new Promise((res) => setTimeout(res, ms))
@@ -121,26 +130,106 @@ export async function depositGM(account: string, poolName: string, amountUsd: nu
           ? `~${expectedGm.toString()} GM expected | Tx: ${hash.slice(0, 8)}...`
           : `Tx: ${hash.slice(0, 8)}...`,
       onSuccess: () =>
-        queryClient.invalidateQueries({ queryKey: ["earn", "gmPoolData"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.earn.gmPoolData(pool.marketAddress, account) }),
       onError: parseSorobanError,
     },
   )
 }
 
-export async function withdrawGM(_account: string, poolName: string, _gmAmount: number): Promise<string> {
-  return runMockWrite(`Withdrawing from ${poolName}...`, "GM withdrawal submitted")
+export async function withdrawGM(account: string, poolName: string, gmAmount: number): Promise<string> {
+  if (!isValidAccount(account)) throw new Error("Connect your wallet before withdrawing.")
+  if (!(gmAmount > 0)) throw new Error("Enter an amount of GM to withdraw.")
+
+  const pool = GM_POOLS.find(
+    (p) => p.name === poolName || p.id === poolName || p.marketAddress === poolName,
+  )
+  if (!pool) throw new Error(`Unknown GM pool: ${poolName}`)
+
+  const withdrawalAmount = toSorobanAmount(gmAmount, GM_TOKEN_DECIMALS)
+  let expectedLongTokens: bigint | null = null
+  let expectedShortTokens: bigint | null = null
+
+  return submitTx(
+    async () => {
+      const built = await buildCreateWithdrawalTransaction({
+        account,
+        market: pool.marketAddress,
+        gmAmount: withdrawalAmount,
+      })
+      expectedLongTokens = built.expectedLongTokens
+      expectedShortTokens = built.expectedShortTokens
+      return prepareAndSign(built.tx, walletKit, NETWORK.networkPassphrase)
+    },
+    {
+      loadingMessage: `Withdrawing from ${pool.name}...`,
+      successMessage: "GM withdrawal submitted",
+      successDescription: (hash) =>
+        expectedLongTokens !== null && expectedShortTokens !== null
+          ? `~${expectedLongTokens.toString()} long + ~${expectedShortTokens.toString()} short expected | Tx: ${hash.slice(0, 8)}...`
+          : `Tx: ${hash.slice(0, 8)}...`,
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.earn.gmPoolData(pool.marketAddress, account) }),
+      onError: parseSorobanError,
+    },
+  )
 }
 
-export async function depositGLV(_account: string, vaultName: string, _amountUsd: number): Promise<string> {
-  return runMockWrite(`Depositing into ${vaultName}...`, "GLV deposit submitted")
+export async function depositGLV(account: string, vaultName: string, amountUsd: number): Promise<string> {
+  if (!isValidAccount(account)) throw new Error("Connect your wallet before depositing.")
+  if (!(amountUsd > 0)) throw new Error("Enter an amount to deposit.")
+
+  const vault = GLV_VAULTS.find(
+    (entry) =>
+      entry.id === vaultName ||
+      entry.name === vaultName ||
+      `${entry.name} [${entry.displayPair}]` === vaultName,
+  )
+  if (!vault) throw new Error(`Unknown GLV vault: ${vaultName}`)
+
+  const depositAmount = toSorobanAmount(amountUsd, GLV_TOKEN_DECIMALS)
+  return createGlvDeposit({
+    account,
+    glvAddress: vault.id,
+    depositAmount,
+  })
 }
 
-export async function withdrawGLV(_account: string, vaultName: string, _glvAmount: number): Promise<string> {
-  return runMockWrite(`Withdrawing from ${vaultName}...`, "GLV withdrawal submitted")
+export async function withdrawGLV(account: string, vaultName: string, glvAmount: number): Promise<string> {
+  if (!isValidAccount(account)) throw new Error("Connect your wallet before withdrawing.")
+  if (!(glvAmount > 0)) throw new Error("Enter an amount of GLV to withdraw.")
+
+  const vault = GLV_VAULTS.find(
+    (entry) =>
+      entry.id === vaultName ||
+      entry.name === vaultName ||
+      `${entry.name} [${entry.displayPair}]` === vaultName,
+  )
+  if (!vault) throw new Error(`Unknown GLV vault: ${vaultName}`)
+
+  const withdrawalAmount = toSorobanAmount(glvAmount, GLV_TOKEN_DECIMALS)
+  return createGlvWithdrawal({
+    account,
+    glvAddress: vault.id,
+    withdrawalAmount,
+  })
 }
 
-export async function claimRewards(_account: string): Promise<string> {
-  return runMockWrite("Claiming rewards...", "Rewards claimed", 1000)
+export async function claimRewards(account: string): Promise<string> {
+  if (!isValidAccount(account)) throw new Error("Connect your wallet before claiming rewards.")
+
+  return submitTx(
+    async () => {
+      const tx = await buildClaimRewardsTransaction(account)
+      return prepareAndSign(tx, walletKit, NETWORK.networkPassphrase)
+    },
+    {
+      loadingMessage: "Claiming rewards...",
+      successMessage: "Rewards claimed successfully",
+      successDescription: (hash) => `Tx: ${hash.slice(0, 8)}...`,
+      onSuccess: () => invalidateStakingQueries(account),
+      onError: parseSorobanError,
+    },
+  )
 }
 
 export async function compoundRewards(_account: string): Promise<string> {
