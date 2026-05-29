@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query"
 import { fetchTokenPrices } from "../lib/oracle"
 import { queryKeys } from "../lib/query-keys"
 import type { TokenPrice } from "../lib/oracle"
+import { getOracleStaleness, type OracleStaleness } from "../lib/pyth"
 import { useTokenList } from "./useTokenList"
 
-// TODO: Replace "stellar-mainnet" with real chainId from wallet context
 const CHAIN_ID = "stellar-mainnet"
 
 type PricesMap = Record<string, TokenPrice>
@@ -13,7 +13,7 @@ export function useTokenPrices() {
   const { getToken } = useTokenList()
 
   const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.trade.tokenPrices(CHAIN_ID),
+    queryKey: queryKeys.tokenPrices(CHAIN_ID),
     queryFn: fetchTokenPrices,
     staleTime: 3_000,
     refetchInterval: 5_000,
@@ -22,21 +22,33 @@ export function useTokenPrices() {
     },
   })
 
+  const resolveSymbol = (addressOrSymbol: string): string => {
+    const token = getToken(addressOrSymbol)
+    return token ? token.symbol : addressOrSymbol
+  }
+
   return {
     prices: data ?? {},
     isLoading,
     error,
     getPrice: (addressOrSymbol: string): TokenPrice | undefined => {
-      const token = getToken(addressOrSymbol)
-      const symbol = token ? token.symbol : addressOrSymbol
+      const symbol = resolveSymbol(addressOrSymbol)
       return data?.[symbol]
     },
     getMidPrice: (addressOrSymbol: string): number => {
-      const token = getToken(addressOrSymbol)
-      const symbol = token ? token.symbol : addressOrSymbol
+      const symbol = resolveSymbol(addressOrSymbol)
       const p = data?.[symbol]
       if (!p) return 0
       return (p.minPrice + p.maxPrice) / 2
+    },
+    getStaleness: (addressOrSymbol: string): OracleStaleness => {
+      const symbol = resolveSymbol(addressOrSymbol)
+      const p = data?.[symbol]
+      if (!p) return "stale"
+      return getOracleStaleness(p.updatedAt)
+    },
+    isStale: (addressOrSymbol: string): boolean => {
+      return getOracleStaleness(data?.[resolveSymbol(addressOrSymbol)]?.updatedAt ?? 0) === "stale"
     },
   }
 }
