@@ -4,7 +4,7 @@
   "description": "This project can be use as a starting point for developing your new Stellar Soroban Test Network SubQuery project",
   "main": "dist/index.js",
   "scripts": {
-    "build": "subql build",
+    "build": "bun run codegen && subql build",
     "codegen": "subql codegen",
     "sync:contracts:testnet": "bun run scripts/sync-contracts.ts --network testnet",
     "sync:contracts:local": "bun run scripts/sync-contracts.ts --network local",
