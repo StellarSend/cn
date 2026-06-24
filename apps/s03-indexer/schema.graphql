@@ -187,7 +187,7 @@ type MarketTokenTransfer @entity {
   amount: String!
   ledger: Int! @index
   timestamp: Date! @index
-  transactionHash: String @index
+  transactionHash: String! @index
 }
 
 """
