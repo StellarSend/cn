@@ -4,6 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "exports": {
@@ -14,6 +17,9 @@
     "buffer": "^6.0.3"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "@repo/vitest-config": "workspace:*",
+    "@vitest/coverage-v8": "^4.1.9",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
   }
 }
