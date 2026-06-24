@@ -81,57 +81,61 @@ type ContractConfig = {
   markets?: MarketMetadata[];
 };
 
+declare const require: (path: string) => ContractConfig;
+
 const ZERO_ADDRESS = "00000000000000000000000000000000000000000000000000000000";
-const SO4_CONTRACTS: ContractConfig = {
-  network: { name: "testnet" },
-  contracts: {
-    role_store: "CBSUAIAMIFFS4AXQYZ7KR7FNO7IMKAPS5WF4DXANVXDTPKH2F7YUIN6Q",
-    data_store: "CCZ3VKBEDLNBO2JM3EXL3SNBDJOV5BTN52FVQPER7F6D5GCE53PITQ3J",
-    oracle: "CBEMTV23SIJJBIST3V5HTMWHR4MHYGHNBIG4M26U4LGUJTWZXTFSVQEY",
-    market_factory: "CBGX3EJFI3JRHSN5B533O2L5P57JFPTCRS55IPWFS5BNDXLJLXDWA5Z2",
-    deposit_handler: "CDWOFIP4YQJGMCYAOWLSRBAWN2OTJUG2I5WOFC32O2TX2SRU56RWBE5C",
-    withdrawal_handler: "CBRWM6PNRRFL5RSTJH6HWEXBTMWCGLQRO45NTRDB6BBABWXZ4ZE7DGTO",
-    order_handler: "CC35OFZVWUTAZPV3B6UKSDVAVORZEWUUMOMTHO33H4YR4C5FKPEFODKY",
-    liquidation_handler: "CBXUAR5GCHIRFQL75WTZS3FLA6SMWDPIKG4EKNPWVQVNGVFXBHGTJHTM",
-    adl_handler: "CACFPG3QAKG6DCAJSOP7YGDTM44NV6NPI3SKAG7GUGIV6DMGXPCAMMME",
-    fee_handler: "CC4P3FJ7EAH6F3RYJPQ2T7VIB4I7UJ4EEYGVWTZVXTAUN647QRVSDHS4",
-    referral_storage: "CDHTPQO4RRJ6OUBIW3GDXTIVLVOMIKPJC65PGDJH2G5OLDJRE5KTROWK",
-    reader: "CC6OZUHF3LVO6PNP3V2EB36ORB3YSVYSH3LWD3RFLO4NUO3BYCXSWSYC",
-    exchange_router: "CBD6BQSQFROWIIT5QCYN7KL5LJJWUIH7CEWUSZIFMUJO6NPXE6CVGYNW",
-  },
-  tokens: {
-    TUSDC: "CBAN5YU3KRDKPTQ2H76D6S7HQFPRBGUD524F65BUM2RQCITPTRLKWKES",
-    TWBTC: "CCFTOPHUPSUDO2MB4X5D3XYJ2HRJ7NJPAW4UVPAVN7ZLE63EZLSMXDUO",
-    TETH: "CAJ6BZKGFT47ALGMVFZZGAOXBV2RWIVYVCU4WJCQIURKRNXU346RWVAU",
-    TXLM: "CAHNXBBSXVMGI6G3FUBY3OTNWKQ7434FDDEEE7ZT733WIW6NUZL4ONU6",
-    faucet: "CCWXXBKXHHP5DXC6TYVIL22XUNHD5A75O6WM5D2KM5PY45IOV5VDMARJ",
-  },
-  markets: [
-    {
-      name: "TETH/TUSDC",
-      marketToken: "CCBUUSYZJTGVA6PYUNQDFPZFHTBZ2QSHOUO7YAGRQVA46T3ZLSIYULS4",
-      indexToken: "CAJ6BZKGFT47ALGMVFZZGAOXBV2RWIVYVCU4WJCQIURKRNXU346RWVAU",
-      longToken: "CAJ6BZKGFT47ALGMVFZZGAOXBV2RWIVYVCU4WJCQIURKRNXU346RWVAU",
-      shortToken: "CBAN5YU3KRDKPTQ2H76D6S7HQFPRBGUD524F65BUM2RQCITPTRLKWKES",
-    },
-    {
-      name: "TWBTC/TUSDC",
-      marketToken: "CDDVSLBGGDV2UOFN5W72R4LW7ABYL7H7ZWVSFHGMXXB3D52ZYANC5G3L",
-      indexToken: "CCFTOPHUPSUDO2MB4X5D3XYJ2HRJ7NJPAW4UVPAVN7ZLE63EZLSMXDUO",
-      longToken: "CCFTOPHUPSUDO2MB4X5D3XYJ2HRJ7NJPAW4UVPAVN7ZLE63EZLSMXDUO",
-      shortToken: "CBAN5YU3KRDKPTQ2H76D6S7HQFPRBGUD524F65BUM2RQCITPTRLKWKES",
-    },
-    {
-      name: "TXLM/TUSDC",
-      marketToken: "CDIBR7BDCDWGAG3CC6PBKRSLMISPYKNDGE57DCZO5TMTLZK34TMGKFQQ",
-      indexToken: "CAHNXBBSXVMGI6G3FUBY3OTNWKQ7434FDDEEE7ZT733WIW6NUZL4ONU6",
-      longToken: "CAHNXBBSXVMGI6G3FUBY3OTNWKQ7434FDDEEE7ZT733WIW6NUZL4ONU6",
-      shortToken: "CBAN5YU3KRDKPTQ2H76D6S7HQFPRBGUD524F65BUM2RQCITPTRLKWKES",
-    },
-  ],
-};
+const SO4_CONTRACTS = require("../../config/contracts.testnet.json");
 
 const CONFIGURED_CONTRACTS = buildConfiguredContracts(SO4_CONTRACTS);
+const MARKET_CREATED_INDEX = {
+  marketToken: 0,
+  indexToken: 1,
+  longToken: 2,
+  shortToken: 3,
+} as const;
+const REQUEST_CREATED_INDEX = {
+  key: 0,
+  account: 1,
+  market: 2,
+} as const;
+const REQUEST_UPDATED_INDEX = {
+  key: 0,
+  account: 1,
+} as const;
+const POSITION_INCREASE_INDEX = {
+  key: 0,
+  account: 1,
+  sizeDeltaUsd: 2,
+  executionPrice: 3,
+} as const;
+const POSITION_DECREASE_INDEX = {
+  ...POSITION_INCREASE_INDEX,
+  pnlUsd: 4,
+} as const;
+const LIQUIDATION_REQUEST_INDEX = {
+  account: 0,
+  market: 1,
+  isLong: 2,
+} as const;
+const LIQUIDATION_EXECUTED_INDEX = {
+  account: 0,
+  market: 1,
+  pnlUsd: 2,
+  executionPrice: 3,
+} as const;
+const ADL_REQUEST_INDEX = {
+  account: 0,
+  market: 1,
+  isLong: 2,
+  sizeDeltaUsd: 3,
+  pnlUsd: 4,
+} as const;
+const ADL_EXECUTED_INDEX = {
+  account: 0,
+  market: 1,
+  sizeDeltaUsd: 2,
+  pnlUsd: 3,
+} as const;
 const INTEGER_TYPES = new Set([
   "scvU32",
   "scvI32",
@@ -331,7 +335,7 @@ export function decodeTuple(scVal: xdr.ScVal | undefined): DecodedTuple {
 
   if (scVal.switch().name === "scvVec") {
     const list = (scVal.vec() ?? []).map((value) => decodeScVal(value));
-    return { list, named: namedTuple(list) };
+    return { list, named: {} };
   }
 
   if (scVal.switch().name === "scvMap") {
@@ -395,17 +399,6 @@ function decodeContractId(contractId: SorobanEvent["contractId"]): string | unde
   return Address.contract(contractId.contractId() as unknown as Buffer).toString();
 }
 
-function namedTuple(list: DecodedValue[]): Record<string, DecodedValue> {
-  const named: Record<string, DecodedValue> = {};
-  for (let index = 0; index < list.length - 1; index += 2) {
-    const key = list[index];
-    if (typeof key === "string") {
-      named[key] = list[index + 1];
-    }
-  }
-  return named;
-}
-
 function isConfiguredContract(contractAddress: string): boolean {
   return (
     CONFIGURED_CONTRACTS.protocolAddresses.has(contractAddress) ||
@@ -415,9 +408,9 @@ function isConfiguredContract(contractAddress: string): boolean {
 }
 
 async function handleMarketCreated(event: DecodedEvent): Promise<void> {
-  const marketToken = fieldString(event, ["market_token", "marketToken"], 0) ?? event.contractAddress;
+  const marketToken = fieldString(event, ["market_token", "marketToken"], MARKET_CREATED_INDEX.marketToken) ?? event.contractAddress;
   const metadata = CONFIGURED_CONTRACTS.marketMetadataByToken.get(marketToken);
-  const marketKey = fieldString(event, ["market", "market_key", "key"], 1) ?? marketToken;
+  const marketKey = fieldString(event, ["market", "market_key", "key"], MARKET_CREATED_INDEX.marketToken) ?? marketToken;
   const id = marketId(marketKey);
   const contract = await ensureProtocolContract(event.contractAddress, event);
 
@@ -433,9 +426,9 @@ async function handleMarketCreated(event: DecodedEvent): Promise<void> {
     key: marketKey,
     contractId: contract.id,
     marketTokenId: marketToken,
-    indexTokenId: metadata?.indexToken,
-    longTokenId: metadata?.longToken,
-    shortTokenId: metadata?.shortToken,
+    indexTokenId: fieldString(event, ["index_token", "indexToken"], MARKET_CREATED_INDEX.indexToken) ?? metadata?.indexToken,
+    longTokenId: fieldString(event, ["long_token", "longToken"], MARKET_CREATED_INDEX.longToken) ?? metadata?.longToken,
+    shortTokenId: fieldString(event, ["short_token", "shortToken"], MARKET_CREATED_INDEX.shortToken) ?? metadata?.shortToken,
     name: fieldString(event, ["name"], 2) ?? metadata?.name,
     status: "ACTIVE",
     createdBy: fieldString(event, ["account", "creator", "sender"], 3),
@@ -462,8 +455,8 @@ async function handleMarketCreated(event: DecodedEvent): Promise<void> {
 
 async function handleDeposit(event: DecodedEvent): Promise<void> {
   const key = lifecycleKey(event, "deposit");
-  const market = await ensureMarketForEvent(event);
-  const account = requiredAccount(event);
+  const market = await ensureMarketForEvent(event, REQUEST_CREATED_INDEX.market);
+  const account = requiredAccount(event, REQUEST_CREATED_INDEX.account);
   const id = deterministicId("deposit", key);
   const status = statusForEvent(event.eventName, "deposit");
   const deposit = await upsert(Deposit, id, {
@@ -471,12 +464,12 @@ async function handleDeposit(event: DecodedEvent): Promise<void> {
     key,
     marketId: market.id,
     account,
-    receiver: fieldString(event, ["receiver"], 3),
+    receiver: fieldString(event, ["receiver"], REQUEST_UPDATED_INDEX.account),
     status,
     longTokenAmount: fieldString(event, ["long_amount", "longTokenAmount"], 4),
     shortTokenAmount: fieldString(event, ["short_amount", "shortTokenAmount"], 5),
     minMarketTokens: fieldString(event, ["min_market_tokens", "minMarketTokens"], 6),
-    marketTokenAmount: fieldString(event, ["market_token_amount", "marketTokenAmount"], 7),
+    marketTokenAmount: fieldString(event, ["market_token_amount", "marketTokenAmount"], 2),
     executionFee: fieldString(event, ["execution_fee", "executionFee"], 8),
   });
 
@@ -486,8 +479,8 @@ async function handleDeposit(event: DecodedEvent): Promise<void> {
 
 async function handleWithdrawal(event: DecodedEvent): Promise<void> {
   const key = lifecycleKey(event, "withdrawal");
-  const market = await ensureMarketForEvent(event);
-  const account = requiredAccount(event);
+  const market = await ensureMarketForEvent(event, REQUEST_CREATED_INDEX.market);
+  const account = requiredAccount(event, REQUEST_CREATED_INDEX.account);
   const id = deterministicId("withdrawal", key);
   const status = statusForEvent(event.eventName, "withdrawal");
   const withdrawal = await upsert(Withdrawal, id, {
@@ -495,13 +488,13 @@ async function handleWithdrawal(event: DecodedEvent): Promise<void> {
     key,
     marketId: market.id,
     account,
-    receiver: fieldString(event, ["receiver"], 3),
+    receiver: fieldString(event, ["receiver"], REQUEST_UPDATED_INDEX.account),
     status,
     marketTokenAmount: fieldString(event, ["market_token_amount", "marketTokenAmount"], 4),
     minLongTokenAmount: fieldString(event, ["min_long_amount", "minLongTokenAmount"], 5),
     minShortTokenAmount: fieldString(event, ["min_short_amount", "minShortTokenAmount"], 6),
-    longTokenAmount: fieldString(event, ["long_amount", "longTokenAmount"], 7),
-    shortTokenAmount: fieldString(event, ["short_amount", "shortTokenAmount"], 8),
+    longTokenAmount: fieldString(event, ["long_amount", "longTokenAmount"], 2),
+    shortTokenAmount: fieldString(event, ["short_amount", "shortTokenAmount"], 3),
     executionFee: fieldString(event, ["execution_fee", "executionFee"], 9),
   });
 
@@ -511,8 +504,8 @@ async function handleWithdrawal(event: DecodedEvent): Promise<void> {
 
 async function handleOrder(event: DecodedEvent): Promise<void> {
   const key = lifecycleKey(event, "order");
-  const market = await ensureMarketForEvent(event);
-  const account = requiredAccount(event);
+  const market = await ensureMarketForEvent(event, REQUEST_CREATED_INDEX.market);
+  const account = requiredAccount(event, REQUEST_CREATED_INDEX.account);
   const id = deterministicId("order", key);
   const status = statusForEvent(event.eventName, "order");
   const order = await upsert(Order, id, {
@@ -520,7 +513,7 @@ async function handleOrder(event: DecodedEvent): Promise<void> {
     key,
     marketId: market.id,
     account,
-    receiver: fieldString(event, ["receiver"], 3),
+    receiver: fieldString(event, ["receiver"], REQUEST_UPDATED_INDEX.account),
     positionKey: fieldString(event, ["position_key", "positionKey"], 4),
     orderType: fieldString(event, ["order_type", "orderType"], 5) ?? event.eventName,
     status,
@@ -541,8 +534,8 @@ async function handleOrder(event: DecodedEvent): Promise<void> {
 
 async function handlePosition(event: DecodedEvent): Promise<void> {
   const market = await ensureMarketForEvent(event);
-  const account = requiredAccount(event);
-  const key = fieldString(event, ["position_key", "positionKey", "key"], 0)
+  const account = requiredAccount(event, POSITION_INCREASE_INDEX.account);
+  const key = fieldString(event, ["position_key", "positionKey", "key"], POSITION_INCREASE_INDEX.key)
     ?? `${account}:${market.id}:${fieldString(event, ["collateral_token", "collateralToken"], 3) ?? "collateral"}:${fieldBoolean(event, ["is_long", "isLong"], 4) ? "long" : "short"}`;
   const id = deterministicId("position", key);
   const isLong = fieldBoolean(event, ["is_long", "isLong"], 4) ?? false;
@@ -554,12 +547,12 @@ async function handlePosition(event: DecodedEvent): Promise<void> {
     collateralTokenId: fieldString(event, ["collateral_token", "collateralToken"], 3),
     isLong,
     status: event.eventName === "pos_dec" ? "DECREASED" : "OPEN",
-    sizeUsd: fieldString(event, ["next_size_usd", "size_usd", "sizeUsd"], 5),
+    sizeUsd: fieldString(event, ["next_size_usd", "size_usd", "sizeUsd"], POSITION_INCREASE_INDEX.sizeDeltaUsd),
     collateralAmount: fieldString(event, ["next_collateral_amount", "collateral_amount", "collateralAmount"], 6),
     averagePrice: fieldString(event, ["average_price", "averagePrice"], 7),
     entryFundingRate: fieldString(event, ["entry_funding_rate", "entryFundingRate"], 8),
     reserveAmount: fieldString(event, ["reserve_amount", "reserveAmount"], 9),
-    realizedPnlUsd: fieldString(event, ["realized_pnl_usd", "realizedPnlUsd"], 10),
+    realizedPnlUsd: fieldString(event, ["realized_pnl_usd", "realizedPnlUsd"], POSITION_DECREASE_INDEX.pnlUsd),
     realizedPnlAmount: fieldString(event, ["realized_pnl_amount", "realizedPnlAmount"], 11),
     latestOrderKey: fieldString(event, ["order_key", "orderKey"], 12),
     openedLedger: event.eventName === "pos_inc" ? event.ledger : undefined,
@@ -575,8 +568,8 @@ async function handlePosition(event: DecodedEvent): Promise<void> {
 }
 
 async function handleLiquidation(event: DecodedEvent): Promise<void> {
-  const market = await ensureMarketForEvent(event);
-  const account = requiredAccount(event);
+  const market = await ensureMarketForEvent(event, LIQUIDATION_REQUEST_INDEX.market);
+  const account = requiredAccount(event, LIQUIDATION_REQUEST_INDEX.account);
   const key = fieldString(event, ["liquidation_key", "position_key", "key"], 0) ?? event.id;
   const id = deterministicId("liquidation", key);
   const liquidation = await upsert(Liquidation, id, {
@@ -588,12 +581,12 @@ async function handleLiquidation(event: DecodedEvent): Promise<void> {
     liquidator: fieldString(event, ["liquidator"], 3),
     collateralTokenId: fieldString(event, ["collateral_token", "collateralToken"], 4),
     status: event.eventName === "liq_exe" ? "EXECUTED" : "REQUESTED",
-    isLong: fieldBoolean(event, ["is_long", "isLong"], 5),
+    isLong: fieldBoolean(event, ["is_long", "isLong"], LIQUIDATION_REQUEST_INDEX.isLong),
     sizeDeltaUsd: fieldString(event, ["size_delta_usd", "sizeDeltaUsd"], 6),
     collateralLiquidatedAmount: fieldString(event, ["collateral_liquidated_amount", "collateralLiquidatedAmount"], 7),
     remainingCollateralAmount: fieldString(event, ["remaining_collateral_amount", "remainingCollateralAmount"], 8),
-    liquidationPrice: fieldString(event, ["liquidation_price", "liquidationPrice"], 9),
-    pnlUsd: fieldString(event, ["pnl_usd", "pnlUsd"], 10),
+    liquidationPrice: fieldString(event, ["liquidation_price", "liquidationPrice"], LIQUIDATION_EXECUTED_INDEX.executionPrice),
+    pnlUsd: fieldString(event, ["pnl_usd", "pnlUsd"], LIQUIDATION_EXECUTED_INDEX.pnlUsd),
     priceImpactUsd: fieldString(event, ["price_impact_usd", "priceImpactUsd"], 11),
     liquidationFeeUsd: fieldString(event, ["liquidation_fee_usd", "liquidationFeeUsd"], 12),
     ledger: event.ledger,
@@ -604,8 +597,9 @@ async function handleLiquidation(event: DecodedEvent): Promise<void> {
 }
 
 async function handleAdl(event: DecodedEvent): Promise<void> {
-  const market = await ensureMarketForEvent(event);
-  const account = requiredAccount(event);
+  const adlIndex = event.eventName === "adl_exe" ? ADL_EXECUTED_INDEX : ADL_REQUEST_INDEX;
+  const market = await ensureMarketForEvent(event, adlIndex.market);
+  const account = requiredAccount(event, adlIndex.account);
   const key = fieldString(event, ["adl_key", "position_key", "key"], 0) ?? event.id;
   const id = deterministicId("adl", key);
   const adl = await upsert(AdlEvent, id, {
@@ -616,11 +610,11 @@ async function handleAdl(event: DecodedEvent): Promise<void> {
     account,
     collateralTokenId: fieldString(event, ["collateral_token", "collateralToken"], 3),
     status: event.eventName === "adl_exe" ? "EXECUTED" : "REQUESTED",
-    isLong: fieldBoolean(event, ["is_long", "isLong"], 4),
-    sizeReductionUsd: fieldString(event, ["size_reduction_usd", "sizeReductionUsd"], 5),
+    isLong: event.eventName === "adl_req" ? fieldBoolean(event, ["is_long", "isLong"], ADL_REQUEST_INDEX.isLong) : undefined,
+    sizeReductionUsd: fieldString(event, ["size_reduction_usd", "sizeReductionUsd"], adlIndex.sizeDeltaUsd),
     collateralReductionAmount: fieldString(event, ["collateral_reduction_amount", "collateralReductionAmount"], 6),
     executionPrice: fieldString(event, ["execution_price", "executionPrice"], 7),
-    pnlUsd: fieldString(event, ["pnl_usd", "pnlUsd"], 8),
+    pnlUsd: fieldString(event, ["pnl_usd", "pnlUsd"], adlIndex.pnlUsd),
     ledger: event.ledger,
     timestamp: event.timestamp,
     transactionHash: event.transactionHash,
@@ -784,7 +778,7 @@ async function savePositionChange(
   const id = deterministicId("position-change", event.id);
   const change = await upsert(PositionChange, id, {
     id,
-    key: fieldString(event, ["position_key", "positionKey", "key"], 0) ?? event.id,
+    key: fieldString(event, ["position_key", "positionKey", "key"], POSITION_INCREASE_INDEX.key) ?? event.id,
     marketId: marketIdValue,
     positionId,
     account,
@@ -794,13 +788,13 @@ async function savePositionChange(
     changeType,
     status: "EXECUTED",
     isLong: fieldBoolean(event, ["is_long", "isLong"], 4),
-    sizeDeltaUsd: fieldString(event, ["size_delta_usd", "sizeDeltaUsd"], 5),
+    sizeDeltaUsd: fieldString(event, ["size_delta_usd", "sizeDeltaUsd"], POSITION_INCREASE_INDEX.sizeDeltaUsd),
     nextSizeUsd: fieldString(event, ["next_size_usd", "nextSizeUsd"], 6),
     collateralDeltaAmount: fieldString(event, ["collateral_delta_amount", "collateralDeltaAmount"], 7),
     nextCollateralAmount: fieldString(event, ["next_collateral_amount", "nextCollateralAmount"], 8),
-    executionPrice: fieldString(event, ["execution_price", "executionPrice"], 9),
+    executionPrice: fieldString(event, ["execution_price", "executionPrice"], POSITION_INCREASE_INDEX.executionPrice),
     indexTokenPrice: fieldString(event, ["index_token_price", "indexTokenPrice"], 10),
-    pnlUsd: fieldString(event, ["pnl_usd", "pnlUsd"], 11),
+    pnlUsd: fieldString(event, ["pnl_usd", "pnlUsd"], POSITION_DECREASE_INDEX.pnlUsd),
     priceImpactUsd: fieldString(event, ["price_impact_usd", "priceImpactUsd"], 12),
     borrowingFeeUsd: fieldString(event, ["borrowing_fee_usd", "borrowingFeeUsd"], 13),
     fundingFeeAmount: fieldString(event, ["funding_fee_amount", "fundingFeeAmount"], 14),
@@ -812,8 +806,8 @@ async function savePositionChange(
   await change.save();
 }
 
-async function ensureMarketForEvent(event: DecodedEvent): Promise<Market> {
-  const key = fieldString(event, ["market", "market_key", "marketKey"], 1)
+async function ensureMarketForEvent(event: DecodedEvent, marketIndex = 1): Promise<Market> {
+  const key = fieldString(event, ["market", "market_key", "marketKey"], marketIndex)
     ?? firstKnownMarketToken(event)
     ?? event.contractAddress;
   const id = marketId(key);
@@ -983,8 +977,8 @@ function lifecycleKey(event: DecodedEvent, fallback: string): string {
   return fieldString(event, ["key", `${fallback}_key`, `${fallback}Key`], 0) ?? event.id;
 }
 
-function requiredAccount(event: DecodedEvent): string {
-  return fieldString(event, ["account", "owner", "trader"], 2)
+function requiredAccount(event: DecodedEvent, accountIndex = 2): string {
+  return fieldString(event, ["account", "owner", "trader"], accountIndex)
     ?? fieldString(event, ["user"], 0)
     ?? decodeAddress(event.topic[1])
     ?? event.contractAddress;

@@ -143,6 +143,41 @@ bun run indexer:build
 The repository uses the root Bun lockfile only. Do not add `package-lock.json`,
 `yarn.lock`, or `pnpm-lock.yaml` files.
 
+## Event Entity IDs
+
+SO4 event mappings use deterministic IDs so replaying a ledger updates the same
+rows instead of duplicating data. IDs are namespaced by entity and stable
+protocol keys where the event exposes them:
+
+- `market:<market-key-or-market-token>`
+- `deposit:<deposit-key>`
+- `withdrawal:<withdrawal-key>`
+- `order:<order-key>`
+- `position:<position-key>`
+- `liquidation:<liquidation-key>`
+- `adl:<adl-key>`
+- `token-event:<subquery-event-id>`
+
+Immutable event records that do not have a protocol key use the SubQuery event
+ID inside a namespace, for example `position-change:<event-id>` and
+`market-config:<event-id>`. Unknown or malformed events are logged and skipped.
+
+## Event Payload Indices
+
+SO4 handler contracts publish short-symbol topics with positional tuple payloads.
+The indexer decodes `ScMap` payloads by field name, but `ScVec` payloads remain
+positional only. The source-verified tuple offsets used by the mappings are:
+
+- `mkt_new`: `[market_token, index_token, long_token, short_token]`
+- `dep_crt`, `wth_crt`, `ord_crt`: `[key, account, market]`
+- `dep_exe`, `wth_exe`, `ord_exe`, `ord_can`, `ord_upd`: `[key, account_or_receiver, ...]`
+- `pos_inc`: `[position_key, account, size_delta_usd, execution_price]`
+- `pos_dec`: `[position_key, account, size_delta_usd, execution_price, pnl_usd]`
+- `liq_req`: `[account, market, is_long]`
+- `liq_exe`: `[account, market, pnl_usd, execution_price]`
+- `adl_req`: `[account, market, is_long, size_delta_usd, pnl_usd]`
+- `adl_exe`: `[account, market, size_delta_usd, pnl_usd]`
+
 ## Useful Query
 
 After the stack is running, try this query in the GraphQL playground:
