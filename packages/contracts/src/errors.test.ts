@@ -628,4 +628,438 @@ describe("parseSorobanError", () => {
       })
     })
   })
+
+  describe("generic error buckets", () => {
+    describe("simulation failed", () => {
+      it("maps plain string containing 'simulation failed'", () => {
+        expect(parseSorobanError("simulation failed")).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("maps string with 'simulation failed' in context", () => {
+        expect(parseSorobanError("Error: transaction simulation failed during execution")).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("maps nested object with 'simulation failed'", () => {
+        const error = {
+          response: {
+            data: {
+              error: "simulation failed",
+              details: "Contract execution error",
+            },
+          },
+        }
+        expect(parseSorobanError(error)).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("maps Error instance with 'simulation failed' in message", () => {
+        const error = new Error("RPC call: simulation failed for transaction")
+        expect(parseSorobanError(error)).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("maps nested JSON string containing 'simulation failed'", () => {
+        const jsonError = JSON.stringify({
+          status: "error",
+          message: "simulation failed",
+          code: -32000,
+        })
+        expect(parseSorobanError({ data: jsonError })).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("maps Error with cause containing 'simulation failed'", () => {
+        const cause = new Error("simulation failed at contract invocation")
+        const error = new Error("Transaction error", { cause })
+        expect(parseSorobanError(error)).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("handles mixed case 'SIMULATION FAILED'", () => {
+        expect(parseSorobanError("SIMULATION FAILED")).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+    })
+
+    describe("resource or budget exceeded", () => {
+      it("maps plain string containing 'resource'", () => {
+        expect(parseSorobanError("resource exceeded")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps plain string containing 'budget'", () => {
+        expect(parseSorobanError("budget exceeded")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps string with 'resource' in context", () => {
+        expect(parseSorobanError("Error: insufficient resource for transaction")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps string with 'budget' in context", () => {
+        expect(parseSorobanError("Transaction failed: budget limit reached")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps nested object with 'resource'", () => {
+        const error = {
+          response: {
+            data: {
+              error: "resource limit exceeded",
+              limit: 100000,
+              used: 150000,
+            },
+          },
+        }
+        expect(parseSorobanError(error)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps nested object with 'budget'", () => {
+        const error = {
+          error: {
+            message: "budget exhausted",
+            type: "ResourceError",
+          },
+        }
+        expect(parseSorobanError(error)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps Error instance with 'resource' in message", () => {
+        const error = new Error("Contract execution failed: resource insufficient")
+        expect(parseSorobanError(error)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps Error instance with 'budget' in message", () => {
+        const error = new Error("Budget overflow detected")
+        expect(parseSorobanError(error)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps nested JSON string containing 'resource'", () => {
+        const jsonError = JSON.stringify({
+          error_type: "ResourceError",
+          message: "resource limit hit",
+        })
+        expect(parseSorobanError(jsonError)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps nested JSON string containing 'budget'", () => {
+        const jsonError = JSON.stringify({
+          reason: "budget exceeded",
+          max_budget: 10000,
+        })
+        expect(parseSorobanError({ response: { data: jsonError } })).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps Error with cause containing 'resource'", () => {
+        const cause = new Error("resource allocation failed")
+        const error = new Error("Operation failed", { cause })
+        expect(parseSorobanError(error)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("maps Error with cause containing 'budget'", () => {
+        const cause = new Error("budget constraint violation")
+        const error = new Error("Execution error", { cause })
+        expect(parseSorobanError(error)).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("handles mixed case 'RESOURCE'", () => {
+        expect(parseSorobanError("RESOURCE EXCEEDED")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("handles mixed case 'BUDGET'", () => {
+        expect(parseSorobanError("BUDGET LIMIT")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+    })
+
+    describe("timeout or try_again_later", () => {
+      it("maps plain string containing 'timeout'", () => {
+        expect(parseSorobanError("timeout")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps plain string containing 'try_again_later'", () => {
+        expect(parseSorobanError("try_again_later")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps string with 'timeout' in context", () => {
+        expect(parseSorobanError("Error: request timeout after 30 seconds")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps string with 'try_again_later' in context", () => {
+        expect(parseSorobanError("RPC error: try_again_later - node overloaded")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps nested object with 'timeout'", () => {
+        const error = {
+          response: {
+            status: 408,
+            data: {
+              error: "timeout",
+              message: "Request took too long",
+            },
+          },
+        }
+        expect(parseSorobanError(error)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps nested object with 'try_again_later'", () => {
+        const error = {
+          error: {
+            code: "try_again_later",
+            reason: "Server is busy",
+          },
+        }
+        expect(parseSorobanError(error)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps Error instance with 'timeout' in message", () => {
+        const error = new Error("Network timeout occurred")
+        expect(parseSorobanError(error)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps Error instance with 'try_again_later' in message", () => {
+        const error = new Error("Server responded with: try_again_later")
+        expect(parseSorobanError(error)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps nested JSON string containing 'timeout'", () => {
+        const jsonError = JSON.stringify({
+          error_type: "TimeoutError",
+          message: "timeout while processing",
+        })
+        expect(parseSorobanError({ data: jsonError })).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps nested JSON string containing 'try_again_later'", () => {
+        const jsonError = JSON.stringify({
+          status: "error",
+          code: "try_again_later",
+        })
+        expect(parseSorobanError(jsonError)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps Error with cause containing 'timeout'", () => {
+        const cause = new Error("connection timeout")
+        const error = new Error("Request failed", { cause })
+        expect(parseSorobanError(error)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("maps Error with cause containing 'try_again_later'", () => {
+        const cause = new Error("RPC: try_again_later")
+        const error = new Error("Network error", { cause })
+        expect(parseSorobanError(error)).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("handles mixed case 'TIMEOUT'", () => {
+        expect(parseSorobanError("TIMEOUT ERROR")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("handles mixed case 'TRY_AGAIN_LATER'", () => {
+        expect(parseSorobanError("TRY_AGAIN_LATER")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+    })
+
+    describe("rejected or user declined", () => {
+      it("maps plain string containing 'rejected'", () => {
+        expect(parseSorobanError("rejected")).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps plain string containing 'user declined'", () => {
+        expect(parseSorobanError("user declined")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+
+      it("maps string with 'rejected' in context", () => {
+        expect(parseSorobanError("Error: transaction rejected by user")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+
+      it("maps string with 'user declined' in context", () => {
+        expect(parseSorobanError("Wallet response: user declined transaction")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+
+      it("maps nested object with 'rejected'", () => {
+        const error = {
+          response: {
+            data: {
+              status: "rejected",
+              message: "User rejected the transaction",
+            },
+          },
+        }
+        expect(parseSorobanError(error)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps nested object with 'user declined'", () => {
+        const error = {
+          error: {
+            code: 4001,
+            message: "user declined",
+          },
+        }
+        expect(parseSorobanError(error)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps Error instance with 'rejected' in message", () => {
+        const error = new Error("Transaction rejected in wallet")
+        expect(parseSorobanError(error)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps Error instance with 'user declined' in message", () => {
+        const error = new Error("user declined to sign")
+        expect(parseSorobanError(error)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps nested JSON string containing 'rejected'", () => {
+        const jsonError = JSON.stringify({
+          error: "rejected",
+          reason: "User cancelled",
+        })
+        expect(parseSorobanError({ data: jsonError })).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+
+      it("maps nested JSON string containing 'user declined'", () => {
+        const jsonError = JSON.stringify({
+          status: "failed",
+          message: "user declined transaction",
+        })
+        expect(parseSorobanError(jsonError)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps Error with cause containing 'rejected'", () => {
+        const cause = new Error("signature rejected")
+        const error = new Error("Sign failed", { cause })
+        expect(parseSorobanError(error)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("maps Error with cause containing 'user declined'", () => {
+        const cause = new Error("user declined authorization")
+        const error = new Error("Auth error", { cause })
+        expect(parseSorobanError(error)).toBe("Transaction was rejected in your wallet.")
+      })
+
+      it("handles mixed case 'REJECTED'", () => {
+        expect(parseSorobanError("REJECTED BY USER")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+
+      it("handles mixed case 'USER DECLINED'", () => {
+        expect(parseSorobanError("USER DECLINED")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+    })
+
+    describe("generic buckets priority over unknown errors", () => {
+      it("prioritizes 'simulation failed' over fallback", () => {
+        expect(parseSorobanError("unknown error but simulation failed")).toBe(
+          "Transaction simulation failed. Check the details and try again.",
+        )
+      })
+
+      it("prioritizes 'resource' over fallback", () => {
+        expect(parseSorobanError("random text with resource issue")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("prioritizes 'budget' over fallback", () => {
+        expect(parseSorobanError("some error budget problem")).toBe(
+          "Transaction resources exceeded. Try a smaller position.",
+        )
+      })
+
+      it("prioritizes 'timeout' over fallback", () => {
+        expect(parseSorobanError("operation timeout happened")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("prioritizes 'try_again_later' over fallback", () => {
+        expect(parseSorobanError("please try_again_later")).toBe(
+          "Network is busy. Please try again in a moment.",
+        )
+      })
+
+      it("prioritizes 'rejected' over fallback", () => {
+        expect(parseSorobanError("something rejected occurred")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+
+      it("prioritizes 'user declined' over fallback", () => {
+        expect(parseSorobanError("error: user declined something")).toBe(
+          "Transaction was rejected in your wallet.",
+        )
+      })
+    })
+  })
 })
