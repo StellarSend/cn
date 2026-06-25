@@ -1,5 +1,5 @@
-import { renderHook, waitFor } from "@testing-library/react"
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import { renderHook } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useDebounce } from "./useDebounce"
 
 describe("useDebounce", () => {
@@ -113,7 +113,7 @@ describe("useDebounce", () => {
   it("should cleanup timeout on unmount", () => {
     const clearTimeoutSpy = vi.spyOn(global, "clearTimeout")
 
-    const { result, rerender, unmount } = renderHook(
+    const { rerender, unmount } = renderHook(
       ({ value, delay }: { value: string; delay: number }) =>
         useDebounce(value, delay),
       {

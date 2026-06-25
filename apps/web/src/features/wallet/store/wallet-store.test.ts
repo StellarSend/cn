@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { useWalletStore } from "./wallet-store"
 
 describe("useWalletStore", () => {
@@ -52,7 +52,8 @@ describe("useWalletStore", () => {
 
   describe("Connect Transitions", () => {
     it("should transition from disconnected to connected", () => {
-      const { setConnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
 
@@ -65,7 +66,8 @@ describe("useWalletStore", () => {
     it("should set address and walletId together on connect", () => {
       const address = "GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ"
       const walletId = "stellar-expert"
-      const { setConnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected} = getState()
 
       setConnected(address, walletId)
 
@@ -75,7 +77,8 @@ describe("useWalletStore", () => {
     })
 
     it("should preserve pendingTransactionXdr on connect", () => {
-      const { setPendingTransactionXdr, setConnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setPendingTransactionXdr, setConnected} = getState()
       const xdr = "AAAAAgAAAACZf3bw..."
 
       setPendingTransactionXdr(xdr)
@@ -87,7 +90,8 @@ describe("useWalletStore", () => {
     })
 
     it("should handle multiple connect calls (overwrite previous)", () => {
-      const { setConnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
       setConnected("GBBD47UZQ2YNRGESRV37TJZWQ6HC76ZK34CSXVGBTCVRXGT7GBNXVQ34", "ledger")
@@ -101,7 +105,8 @@ describe("useWalletStore", () => {
 
   describe("Disconnect Transitions", () => {
     it("should transition from connected to disconnected", () => {
-      const { setConnected, setDisconnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setDisconnected} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
       expect(getState().status).toBe("connected")
@@ -115,7 +120,8 @@ describe("useWalletStore", () => {
     })
 
     it("should clear address and walletId on disconnect", () => {
-      const { setConnected, setDisconnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setDisconnected} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
       setDisconnected()
@@ -126,8 +132,8 @@ describe("useWalletStore", () => {
     })
 
     it("should preserve pendingTransactionXdr on disconnect", () => {
-      const { setConnected, setPendingTransactionXdr, setDisconnected, getState } =
-        useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setPendingTransactionXdr, setDisconnected} = getState()
       const xdr = "AAAAAgAAAACZf3bw..."
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
@@ -141,7 +147,8 @@ describe("useWalletStore", () => {
     })
 
     it("should handle disconnect when already disconnected", () => {
-      const { setDisconnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setDisconnected} = getState()
 
       setDisconnected()
 
@@ -154,7 +161,8 @@ describe("useWalletStore", () => {
 
   describe("Status Transitions", () => {
     it("should transition to connecting status", () => {
-      const { setStatus, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setStatus} = getState()
 
       setStatus("connecting")
 
@@ -162,7 +170,8 @@ describe("useWalletStore", () => {
     })
 
     it("should transition to error status", () => {
-      const { setStatus, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setStatus} = getState()
 
       setStatus("error")
 
@@ -170,7 +179,8 @@ describe("useWalletStore", () => {
     })
 
     it("should transition through all status states", () => {
-      const { setStatus, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setStatus} = getState()
       const statuses: Array<"disconnected" | "connecting" | "connected" | "error"> = [
         "disconnected",
         "connecting",
@@ -186,7 +196,8 @@ describe("useWalletStore", () => {
     })
 
     it("should handle status change while connected", () => {
-      const { setConnected, setStatus, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setStatus} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
       setStatus("error")
@@ -199,7 +210,8 @@ describe("useWalletStore", () => {
 
   describe("PendingTransactionXdr Transitions", () => {
     it("should set pending transaction XDR", () => {
-      const { setPendingTransactionXdr, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setPendingTransactionXdr} = getState()
       const xdr = "AAAAAgAAAACZf3bw..."
 
       setPendingTransactionXdr(xdr)
@@ -208,7 +220,8 @@ describe("useWalletStore", () => {
     })
 
     it("should clear pending transaction XDR", () => {
-      const { setPendingTransactionXdr, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setPendingTransactionXdr} = getState()
       const xdr = "AAAAAgAAAACZf3bw..."
 
       setPendingTransactionXdr(xdr)
@@ -219,7 +232,8 @@ describe("useWalletStore", () => {
     })
 
     it("should update pending transaction XDR multiple times", () => {
-      const { setPendingTransactionXdr, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setPendingTransactionXdr} = getState()
 
       setPendingTransactionXdr("AAAAAgAAAACZf3bw...")
       expect(getState().pendingTransactionXdr).toBe("AAAAAgAAAACZf3bw...")
@@ -232,7 +246,8 @@ describe("useWalletStore", () => {
     })
 
     it("should preserve wallet connection when setting XDR", () => {
-      const { setConnected, setPendingTransactionXdr, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setPendingTransactionXdr} = getState()
       const xdr = "AAAAAgAAAACZf3bw..."
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
@@ -248,7 +263,8 @@ describe("useWalletStore", () => {
 
   describe("Complex State Transitions", () => {
     it("should handle connecting -> connected -> error -> disconnected flow", () => {
-      const { setStatus, setConnected, setDisconnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setStatus, setConnected, setDisconnected} = getState()
 
       // Start connecting
       setStatus("connecting")
@@ -272,8 +288,8 @@ describe("useWalletStore", () => {
     })
 
     it("should handle transaction flow: connect -> set XDR -> disconnect", () => {
-      const { setConnected, setPendingTransactionXdr, setDisconnected, getState } =
-        useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setPendingTransactionXdr, setDisconnected} = getState()
       const address = "GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ"
       const walletId = "freighter"
       const xdr = "AAAAAgAAAACZf3bw..."
@@ -295,8 +311,8 @@ describe("useWalletStore", () => {
     })
 
     it("should handle reconnection preserving pending transaction", () => {
-      const { setConnected, setPendingTransactionXdr, setDisconnected, getState } =
-        useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setPendingTransactionXdr, setDisconnected} = getState()
       const xdr = "AAAAAgAAAACZf3bw..."
 
       // Initial connection
@@ -317,7 +333,8 @@ describe("useWalletStore", () => {
     })
 
     it("should reset all connection state independently", () => {
-      const { setConnected, setPendingTransactionXdr, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setPendingTransactionXdr} = getState()
 
       // Build up state
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
@@ -341,7 +358,8 @@ describe("useWalletStore", () => {
 
   describe("State Isolation & No Leakage", () => {
     it("should not leak state between independent operations", () => {
-      const { setConnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
       const state1 = getState()
@@ -384,7 +402,8 @@ describe("useWalletStore", () => {
     })
 
     it("should maintain network regardless of wallet changes", () => {
-      const { setConnected, setDisconnected, getState } = useWalletStore
+      const { getState } = useWalletStore
+      const { setConnected, setDisconnected} = getState()
 
       setConnected("GCZXVVCZULC5NZ2V23MZWCABDGVH42DXSBVVMVX34OXQBAWIB7CFZZJ", "freighter")
       expect(getState().network).toBe("testnet")
