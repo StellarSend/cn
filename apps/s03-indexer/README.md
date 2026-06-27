@@ -4,6 +4,12 @@ This Bun workspace package contains the SubQuery Stellar indexer scaffold for
 the S03 app. It indexes Stellar testnet payments, account credit/debit effects,
 and Soroban `transfer` events.
 
+> **New contributor?** Start with the top-level
+> [Local Full-Stack Integration Guide](../../docs/local-full-stack.md). It
+> covers prerequisites, the deploy → sync → index → query → UI path end-to-end,
+> troubleshooting, and the definition of done. Use the rest of this README as
+> the indexer-specific reference.
+
 ## Workspace Commands
 
 Run these commands from the repository root:
@@ -34,11 +40,11 @@ stack.
 
 The Docker stack in `docker-compose.yml` starts three services:
 
-| Service | Image/build | Port | Purpose |
-| --- | --- | --- | --- |
-| `postgres` | local `docker/pg-Dockerfile` | `localhost:5432` | SubQuery metadata and indexed entities |
-| `subquery-node` | `subquerynetwork/subql-node-stellar:latest` | internal `3000` | Stellar/SubQuery indexing node |
-| `graphql-engine` | `subquerynetwork/subql-query:latest` | `localhost:3000` | GraphQL API and playground |
+| Service          | Image/build                                 | Port             | Purpose                                |
+| ---------------- | ------------------------------------------- | ---------------- | -------------------------------------- |
+| `postgres`       | local `docker/pg-Dockerfile`                | `localhost:5432` | SubQuery metadata and indexed entities |
+| `subquery-node`  | `subquerynetwork/subql-node-stellar:latest` | internal `3000`  | Stellar/SubQuery indexing node         |
+| `graphql-engine` | `subquerynetwork/subql-query:latest`        | `localhost:3000` | GraphQL API and playground             |
 
 Requirements:
 
@@ -166,11 +172,11 @@ The runner executes layered, timed steps and records each one in a JSON report:
 
 ### Run modes
 
-| Mode | Behavior |
-| --- | --- |
+| Mode                    | Behavior                                                                    |
+| ----------------------- | --------------------------------------------------------------------------- |
 | `--mode auto` (default) | Reuse a complete local deployment if present, otherwise deploy + bootstrap. |
-| `--mode fresh` | Always deploy test tokens, contracts, and bootstrap a market. |
-| `--mode existing` | Require a complete `.deployed/local.env`; fail fast if missing. |
+| `--mode fresh`          | Always deploy test tokens, contracts, and bootstrap a market.               |
+| `--mode existing`       | Require a complete `.deployed/local.env`; fail fast if missing.             |
 
 ### Common options
 
@@ -209,6 +215,25 @@ bun run --cwd apps/s03-indexer smoke:clean        # stop stack + drop DB + clear
 bun run --cwd apps/s03-indexer smoke:clean --keep-db
 bun run --cwd apps/s03-indexer smoke:clean --reports   # only clear .smoke reports
 ```
+
+## Testing Strategy
+
+Tests live under `tests/` and use **`bun test`** (not Vitest).
+
+| Test runner | When to use                                                                                                                                                                                                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun test`  | Pure-logic unit tests, indexer mapping handler tests, and any test that does **not** need a DOM, React components, or TypeScript type-check harness. The SubQuery Stellar indexer runs in a Node-compatible Bun runtime, so `bun:test` matches the execution environment exactly. |
+| Vitest      | UI component tests (React/DOM rendering), tests that need jsdom/happy-dom, or tests that require full TypeScript type-checking via `vi.mock`-style module stubs. Vitest is used in the `web` app and `ui` package.                                                                |
+
+**Rule of thumb:** If the test imports from `apps/s03-indexer/src/`, write it with `bun test`. If it imports React or renders DOM, write it with Vitest in the `apps/web` package.
+
+Run indexer tests from the repo root:
+
+```bash
+bun run --cwd apps/s03-indexer test
+```
+
+This runs `subql build` followed by `bun test tests/`.
 
 ## Generated Artifacts
 
