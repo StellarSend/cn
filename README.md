@@ -1,121 +1,131 @@
-# SO4 Market
+# StellarSend Contracts
 
-**On-chain perpetual markets, settled on Stellar.**
-
-SO4 is a unified-liquidity perpetuals DEX built on Stellar/Soroban. Deep order books, sub-second matching, and self-custodied risk — built for traders who care where their fills come from.
-
----
-
-## Screenshots
-
-| Landing | Trade |
-|---|---|
-| ![Landing page](./screenshots/landing.png) | ![Trade page](./screenshots/trade.png) |
-
-| Earn | Referrals |
-|---|---|
-| ![Earn page](./screenshots/earn.png) | ![Referrals page](./screenshots/referrals.png) |
+Soroban smart contracts powering the [StellarSend](https://github.com/StellarSend) global money transfer platform. All contracts are written in Rust and deployed on the Stellar network.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Screenshots](#screenshots)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
+- [Architecture Overview](#architecture-overview)
+- [Contracts](#contracts)
+  - [stellar\_send](#stellar_send)
+  - [fee\_collector](#fee_collector)
+  - [token\_bridge](#token_bridge)
 - [Getting Started](#getting-started)
-- [Available Scripts](#available-scripts)
-- [Architecture](#architecture)
+- [Building](#building)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Contract API Reference](#contract-api-reference)
+- [Events](#events)
+- [Security](#security)
 - [Contributing](#contributing)
 - [License](#license)
 
 ---
 
-## Overview
+## Architecture Overview
 
-SO4 Market is the front-end interface for the SO4 perpetuals protocol. It connects to Stellar Soroban smart contracts (ExchangeRouter, DataStore, SyntheticsReader, OrderVault) and streams live prices from Binance (primary) with GMX oracle as automatic fallback.
+```
+┌─────────────────────────────────────────────────────────┐
+│                      User / dApp                        │
+└──────────────────────┬──────────────────────────────────┘
+                       │ send_payment / send_path_payment
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│               stellar_send  (Entry Point)               │
+│                                                         │
+│  • Validates sender + amount                            │
+│  • Deducts protocol fee (bps)                           │
+│  • Routes payment to recipient                          │
+│  • Emits PaymentSent / PathPaymentSent events           │
+└─────────┬───────────────────────────┬───────────────────┘
+          │ forward fee               │ DEX path swap
+          ▼                           ▼
+┌──────────────────────┐   ┌─────────────────────────────┐
+│    fee_collector     │   │       token_bridge           │
+│                      │   │                              │
+│  • Accumulates fees  │   │  • wrap / unwrap assets      │
+│  • Admin withdrawal  │   │  • Enables cross-asset       │
+│  • Per-token totals  │   │    path payments             │
+└──────────────────────┘   └─────────────────────────────┘
+```
 
-> **Status:** Active development. On-chain contract integration is in progress — the current build uses mock transactions with real UI and live price feeds.
+The system is intentionally modular: `stellar_send` is the only contract that end users interact with directly. `fee_collector` and `token_bridge` are infrastructure contracts managed by the protocol admin.
 
 ---
 
-## Features
+## Contracts
 
-| Area | Details |
+### stellar\_send
+
+**Path:** `contracts/stellar_send/`
+
+The main entry point for the StellarSend protocol. Supports direct token transfers and DEX path payments between any Stellar addresses.
+
+| Feature | Description |
 |---|---|
-| **Trade** | Long / Short / Swap with Market, Limit, and Trigger order types |
-| **Chart** | Candlestick chart (lightweight-charts v5), live price updates, position entry & liquidation price lines, dark/light theme |
-| **Positions** | Real-time positions, orders, trades, and claims tabs |
-| **Earn** | Portfolio overview, pool discovery, additional opportunities, reward distributions |
-| **Referrals** | Trader discount codes, affiliate tiers, commission distributions |
-| **Landing** | Live market ticker, order book preview, protocol stats |
-| **Theme** | Full dark / light mode with zero flash on load |
+| Direct payments | Transfer any SEP-41 token from sender to recipient |
+| Path payments | Route through the Stellar DEX for cross-asset transfers |
+| Fee deduction | Protocol fee in basis points (bps), deducted at source |
+| Pause / unpause | Admin can halt new payments in an emergency |
+| Payment records | Every transfer is stored on-ledger for auditability |
+| Admin rotation | Two-step admin handover (propose → accept) |
+
+**Key data types:**
+
+```rust
+pub struct ContractConfig {
+    pub admin: Address,
+    pub fee_bps: u32,          // 100 bps = 1%
+    pub fee_collector: Address,
+    pub active: bool,
+    pub min_amount: i128,
+    pub max_amount: i128,
+}
+
+pub struct PaymentRecord {
+    pub from: Address,
+    pub to: Address,
+    pub token: Address,
+    pub net_amount: i128,
+    pub fee_amount: i128,
+    pub memo: String,
+    pub ledger: u32,
+}
+```
 
 ---
 
-## Tech Stack
+### fee\_collector
 
-| Layer | Technology |
+**Path:** `contracts/fee_collector/`
+
+Receives protocol fees forwarded by `stellar_send` and allows the treasury admin to withdraw accumulated balances.
+
+| Feature | Description |
 |---|---|
-| Monorepo | [Turborepo](https://turbo.build) + [Bun](https://bun.sh) workspaces |
-| Framework | [React 19](https://react.dev) + [Vite 7](https://vitejs.dev) |
-| Routing | [TanStack Router v1](https://tanstack.com/router) |
-| Server state | [TanStack Query v5](https://tanstack.com/query) |
-| Styling | [Tailwind CSS v4](https://tailwindcss.com) |
-| UI components | [shadcn/ui](https://ui.shadcn.com) (via `packages/ui` workspace) |
-| Charts | [lightweight-charts v5](https://tradingview.github.io/lightweight-charts/) |
-| Notifications | [Sonner](https://sonner.emilkowal.ski) |
-| Blockchain | [Stellar](https://stellar.org) / [Soroban](https://soroban.stellar.org) |
-| Oracle | Binance REST (primary) · GMX oracle (fallback) |
-| Type safety | TypeScript 5.9 |
+| Fee accounting | Tracks lifetime totals collected per token |
+| Withdrawal | Admin-only; supports arbitrary recipient |
+| Treasury management | Treasury address updatable by admin |
+| Period limits | Configurable withdrawal limit per epoch |
+| Multi-token | Operates on any SEP-41 token |
 
 ---
 
-## Project Structure
+### token\_bridge
 
-```
-so4-market/
-├── apps/
-│   └── web/                        # Main React/Vite application
-│       ├── public/                 # Static assets (favicon, manifest, PWA icons)
-│       ├── scripts/                # Build-time utilities
-│       └── src/
-│           ├── features/
-│           │   ├── earn/           # Earn page — pools, portfolio, rewards
-│           │   ├── referrals/      # Referrals — traders, affiliates, distributions
-│           │   └── trade/          # Trade page — chart, order panel, positions
-│           ├── routes/             # TanStack Router file-based routes
-│           ├── styles/             # Global CSS (landing)
-│           └── ui/                 # Shared UI — Navbar, ThemeProvider, landing sections
-│
-├── packages/
-│   └── ui/                         # Shared component library (shadcn/ui)
-│       └── src/
-│           ├── components/         # Button, Input, Dialog, Tabs, Skeleton, …
-│           ├── hooks/
-│           ├── lib/
-│           └── styles/
-│               └── globals.css     # Tailwind base + CSS custom properties
-│
-├── turbo.json                      # Turborepo pipeline config
-├── package.json                    # Root workspace manifest
-├── tsconfig.json                   # Root TypeScript config
-└── bun.lock
-```
+**Path:** `contracts/token_bridge/`
 
-### Feature module layout
+A lightweight wrap / unwrap bridge for non-native Stellar assets. Users deposit an underlying token and receive an equal amount of wrapped tokens, enabling cross-asset path payments through the StellarSend DEX flow.
 
-Each feature under `src/features/<name>/` follows the same convention:
-
-```
-<feature>/
-├── components/     # React components (page + sub-components)
-├── data/           # Static data / contract address constants
-├── hooks/          # TanStack Query hooks (data fetching + mutations)
-└── lib/            # Business logic, contract calls, type definitions
-```
+| Feature | Description |
+|---|---|
+| wrap | Deposit underlying → receive wrapped balance |
+| unwrap | Burn wrapped balance → receive underlying |
+| Bridge fee | Configurable bps fee on wrap operations |
+| Supply cap | Configurable maximum wrapped supply |
+| Pause / unpause | Admin can halt wrapping in an emergency |
+| Admin rotation | Two-step admin handover |
 
 ---
 
@@ -123,218 +133,245 @@ Each feature under `src/features/<name>/` follows the same convention:
 
 ### Prerequisites
 
-| Tool | Version |
-|---|---|
-| [Bun](https://bun.sh) | ≥ 1.3 |
-| [Node.js](https://nodejs.org) | ≥ 20 |
+| Tool | Version | Install |
+|---|---|---|
+| Rust | stable (see `rust-toolchain.toml`) | `curl https://sh.rustup.rs -sSf \| sh` |
+| Soroban CLI | ≥ 21.0.0 | `cargo install --locked soroban-cli` |
+| wasm32 target | — | `rustup target add wasm32-unknown-unknown` |
 
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/SO4-Markets/so4-monorepo.git
-cd so4-monorepo
-
-# Install all workspace dependencies
-bun install
-```
-
-### Full local stack (contracts + indexer + web)
-
-If you need the indexer and contracts running against the web app, follow the
-[Local Full-Stack Integration Guide](./docs/local-full-stack.md). It documents
-prerequisites, deploy/bootstrap, manifest sync, indexer start, smoke flow,
-GraphQL verification, UI verification, troubleshooting, and the definition of
-done. Run `bun run check:integration` before pushing to mirror the CI matrix.
-
-### Running the development server
+### Clone and install
 
 ```bash
-# Start all apps in watch mode
-bun dev
-
-# Or start only the web app
-cd apps/web && bun dev
+git clone https://github.com/StellarSend/contracts.git
+cd contracts
 ```
 
-The app will be available at [http://localhost:3000](http://localhost:3000).
-
-### Building for production
-
-```bash
-bun build
-```
-
-Output is written to `apps/web/.output/`.
+The workspace `Cargo.toml` pins all dependency versions. No additional install step is required.
 
 ---
 
-## Available Scripts
+## Building
 
-Run any of these from the **repository root**:
-
-| Command | Description |
-|---|---|
-| `bun dev` | Start all packages in development mode |
-| `bun build` | Build all packages for production |
-| `bun lint` | Lint all packages with ESLint |
-| `bun format` | Format all files with Prettier |
-| `bun typecheck` | Run TypeScript type checks across all packages |
-
-## Testing Guide
-
-From a clean checkout, install workspace dependencies once:
+Build all contracts to WASM:
 
 ```bash
-bun install
+make build
+# or directly:
+bash scripts/build.sh
 ```
 
-Run the focused test suites from the repository root:
+Individual contract:
 
 ```bash
-bun run --cwd packages/contracts test
-bun run --cwd apps/web test
-bun run test:e2e
+soroban contract build --package stellar_send
+soroban contract build --package fee_collector
+soroban contract build --package token_bridge
 ```
 
-The end-to-end suite uses Playwright. On a fresh machine, Playwright may need
-browser binaries or OS-level system dependencies before `bun run test:e2e` can
-launch browsers. If Playwright reports missing dependencies, install them with
-the Playwright CLI through Bun:
-
-```bash
-bunx playwright install --with-deps
-```
-
-Web tests run with MSW enabled and `onUnhandledRequest: "error"`, so every
-network request made by a test must have an explicit mock handler. Add shared
-handlers in `apps/web/test/msw/handlers.ts` or test-specific handlers with
-`server.use(...)`. Tests must not depend on real external network calls.
+Compiled WASM files are written to `target/wasm32-unknown-unknown/release/`.
 
 ---
 
-## Architecture
+## Testing
 
-### Oracle / Price feeds
+Run the full test suite:
 
-Live candle data and token prices are fetched from the Binance public REST API. If Binance is unavailable or rate-limited, the oracle module automatically retries against the GMX oracle endpoint. Both sources are normalised into a shared `OhlcBar` type (oldest-first, prices as numbers, time in Unix seconds).
+```bash
+make test
+# or:
+bash scripts/test.sh
+```
 
-### Contract integration
+Individual contract tests:
 
-The `lib/stellar.ts`, `lib/earn.ts`, and `lib/referrals.ts` files define the full contract call surface. Each function is currently a **stub** that simulates latency and shows a toast — the real Stellar SDK + Soroban RPC calls are documented inline with `TODO` comments. Contracts to integrate:
+```bash
+cargo test -p stellar_send
+cargo test -p fee_collector
+cargo test -p token_bridge
+```
 
-- `ExchangeRouter` — `createOrder` (increase / decrease / swap)
-- `DataStore` — on-chain key-value protocol config
-- `SyntheticsReader` — `getMarketInfo`, `getPositionInfo`, `getOrderInfo` (batched)
-- `OrderVault` — holds collateral between order creation and execution
-- `StakingRouter` — `stakeSO4`, `unstakeSO4`
-- `ReferralsRouter` — `setTraderReferralCodeByUser`, `registerCode`
+Run with output:
 
-### Theme system
+```bash
+cargo test -p stellar_send -- --nocapture
+```
 
-The theme provider writes `dark` or `light` as a class on `<html>`. A blocking inline script in `<head>` reads `localStorage` before first paint to prevent flash of wrong theme. The chart component uses a `MutationObserver` on `document.documentElement` to re-apply color options instantly when the class changes.
+---
+
+## Deployment
+
+### Testnet
+
+```bash
+# Set environment
+export STELLAR_NETWORK=testnet
+export STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+export STELLAR_ACCOUNT=<your-secret-key>
+
+# Deploy fee_collector first (stellar_send depends on its address)
+bash scripts/deploy.sh fee_collector
+
+# Deploy token_bridge
+bash scripts/deploy.sh token_bridge
+
+# Deploy stellar_send, passing fee_collector address
+bash scripts/deploy.sh stellar_send <fee_collector_address>
+```
+
+### Mainnet
+
+Same steps as testnet; update `STELLAR_NETWORK=mainnet` and `STELLAR_RPC_URL=https://horizon.stellar.org`.
+
+> **Note:** Mainnet deployments require a multi-sig admin key. Refer to the [Security](#security) section.
+
+---
+
+## Contract API Reference
+
+### stellar\_send
+
+#### `initialize(admin, fee_bps, fee_collector) → Result<(), StellarSendError>`
+
+Initialise the contract. Must be called exactly once by `admin`.
+
+- `fee_bps`: Protocol fee in basis points. Range: `0..=10_000`.
+- `fee_collector`: Address of the deployed `fee_collector` contract.
+
+#### `send_payment(from, to, token, amount, memo) → Result<PaymentRecord, StellarSendError>`
+
+Transfer `amount` of `token` from `from` to `to`. The protocol fee is deducted from `amount` before transfer.
+
+**Requires auth from:** `from`
+
+#### `send_path_payment(from, to, send_token, send_amount, dest_token, min_dest_amount, path) → Result<i128, StellarSendError>`
+
+Route a payment through the Stellar DEX. The fee is deducted from `send_amount` before the swap is attempted.
+
+**Requires auth from:** `from`
+
+#### `set_fee(new_fee_bps) → Result<(), StellarSendError>`
+
+Update the protocol fee. **Admin only.**
+
+#### `pause() / unpause() → Result<(), StellarSendError>`
+
+Halt or resume new payments. **Admin only.**
+
+#### `transfer_admin(new_admin) → Result<(), StellarSendError>`
+
+Propose a new admin (step 1 of 2). **Current admin only.**
+
+#### `accept_admin() → Result<(), StellarSendError>`
+
+Complete the admin rotation (step 2 of 2). **Proposed admin only.**
+
+#### `get_config() → Result<ContractConfig, StellarSendError>`
+
+Return current configuration.
+
+#### `get_payment_record(from, seq) → Result<PaymentRecord, StellarSendError>`
+
+Retrieve a stored payment record by sender address and sequence number.
+
+---
+
+### fee\_collector
+
+#### `initialize(admin, treasury) → Result<(), FeeCollectorError>`
+
+#### `collect_fee(token, amount) → Result<(), FeeCollectorError>`
+
+Record fee receipt. The token transfer must already have been made by `stellar_send`.
+
+#### `withdraw(token, amount, recipient) → Result<(), FeeCollectorError>`
+
+Withdraw fees to `recipient`. **Admin only.**
+
+#### `get_balance(token) → i128`
+
+Return current token balance held by the contract.
+
+#### `get_total_collected(token) → i128`
+
+Return the lifetime total of fees collected in `token`.
+
+---
+
+### token\_bridge
+
+#### `initialize(admin, underlying_token) → Result<(), TokenBridgeError>`
+
+#### `wrap(from, amount) → Result<i128, TokenBridgeError>`
+
+Deposit `amount` of underlying token; credit wrapped balance.
+
+#### `unwrap(from, amount) → Result<i128, TokenBridgeError>`
+
+Burn `amount` of wrapped balance; return underlying tokens.
+
+#### `get_wrapped_balance(holder) → i128`
+
+#### `get_underlying_token() → Result<Address, TokenBridgeError>`
+
+---
+
+## Events
+
+All contracts emit structured events consumable by the Horizon API or Soroban event subscriptions.
+
+| Contract | Topic | Data |
+|---|---|---|
+| stellar_send | `payment_sent` | `(from, to, token, net_amount, fee_amount, memo)` |
+| stellar_send | `path_payment_sent` | `(from, to, send_token, send_amount, dest_token, dest_amount, fee_amount)` |
+| stellar_send | `fee_updated` | `(old_bps, new_bps)` |
+| stellar_send | `paused / unpaused` | `ledger` |
+| fee_collector | `fee_received` | `(token, amount)` |
+| fee_collector | `fee_withdrawn` | `(token, recipient, amount)` |
+| token_bridge | `wrapped` | `(underlying, amount)` |
+| token_bridge | `unwrapped` | `(underlying, amount)` |
+
+Subscribe to events via Horizon:
+
+```bash
+soroban events --contract-id <CONTRACT_ID> --network testnet
+```
+
+---
+
+## Security
+
+### Admin key management
+
+- All admin keys should be multi-sig accounts on mainnet.
+- Admin rotation uses a two-step propose/accept pattern to prevent key loss.
+- The `fee_collector` treasury address is separate from the admin key.
+
+### Audit status
+
+| Contract | Auditor | Status |
+|---|---|---|
+| stellar\_send | — | In progress |
+| fee\_collector | — | In progress |
+| token\_bridge | — | In progress |
+
+### Reporting vulnerabilities
+
+Please report security issues privately via email to **security@stellarsend.io**. Do **not** open a public issue for a security vulnerability. See [SECURITY.md](SECURITY.md) for our responsible disclosure policy.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please follow the steps below.
+We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-### 1. Fork and clone
-
-```bash
-git clone https://github.com/SO4-Markets/so4-monorepo.git
-cd so4-monorepo
-bun install
-```
-
-### 2. Create a branch
-
-Use a short, descriptive name:
-
-```bash
-git checkout -b feat/order-book-component
-git checkout -b fix/chart-theme-flash
-git checkout -b chore/upgrade-tanstack-query
-```
-
-### 3. Make your changes
-
-- Follow the existing feature-module structure (`components/`, `hooks/`, `lib/`, `data/`).
-- Keep components focused — one responsibility per file.
-- Use Tailwind utility classes; avoid inline styles.
-- Run `bun format` before committing.
-
-### 4. Commit style
-
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat: add limit order confirmation dialog
-fix: resolve chart flicker on theme toggle
-chore: upgrade lightweight-charts to 5.3
-docs: document contract integration stubs
-refactor: extract oracle normalisation into shared util
-```
-
-### 5. Open a pull request
-
-Push your branch and open a PR against `main`. Include:
-
-- **What** changed and **why**.
-- Screenshots or recordings for UI changes.
-- Notes on any contract-integration assumptions.
-
-### Code style
-
-| Rule | Detail |
-|---|---|
-| Formatter | Prettier (`bun format`) — config in `.prettierrc` |
-| Linter | ESLint with `@tanstack/eslint-config` |
-| Imports | Absolute workspace imports (`@workspace/ui/...`) preferred over deep relative paths |
-| Comments | Only for non-obvious intent — avoid restating what the code already says |
-
-### Reporting issues
-
-Open an issue on GitHub with:
-
-- A clear title and description.
-- Steps to reproduce (for bugs).
-- The expected vs actual behaviour.
-- Browser / OS / Bun version if relevant.
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Make your changes and add tests
+4. Run `make test` — all tests must pass
+5. Open a PR against `main`
 
 ---
 
 ## License
 
-```
-MIT License
-
-Copyright (c) 2026 so4 labs
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
----
-
-<p align="center">
-  Built by <a href="https://so4.market">so4 labs</a> ·
-  <a href="https://twitter.com/so4market">@so4market</a>
-</p>
-
+MIT © 2026 StellarSend. See [LICENSE](LICENSE) for full text.
