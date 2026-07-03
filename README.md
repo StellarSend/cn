@@ -11,6 +11,12 @@ Soroban smart contracts powering the [StellarSend](https://github.com/StellarSen
   - [stellar\_send](#stellar_send)
   - [fee\_collector](#fee_collector)
   - [token\_bridge](#token_bridge)
+  - [escrow](#escrow)
+- [Differentiator Features](#differentiator-features)
+  - [Scheduled & recurring payments](#scheduled--recurring-payments)
+  - [Split / batch payments](#split--batch-payments)
+  - [Payment requests / invoicing](#payment-requests--invoicing)
+  - [Escrow / conditional transfers](#escrow--conditional-transfers)
 - [Getting Started](#getting-started)
 - [Building](#building)
 - [Testing](#testing)
@@ -126,6 +132,78 @@ A lightweight wrap / unwrap bridge for non-native Stellar assets. Users deposit 
 | Supply cap | Configurable maximum wrapped supply |
 | Pause / unpause | Admin can halt wrapping in an emergency |
 | Admin rotation | Two-step admin handover |
+
+---
+
+### escrow
+
+**Path:** `contracts/escrow/`
+
+A standalone contract holding funds in on-chain custody until a time or arbiter condition releases them — deposits, marketplace holdbacks, milestone payments. Split out as its own crate (like `fee_collector`/`token_bridge`) since it has its own fund-custody lifecycle independent of `stellar_send`.
+
+| Feature | Description |
+|---|---|
+| Time-locked release | Beneficiary can claim once `unlock_time` has passed |
+| Optional arbiter | Can release to the beneficiary or refund to the depositor at any time |
+| Anti-griefing refund | Depositor can only self-refund after `unlock_time` + a 1-week grace period |
+| Escrow lookup | `get_escrow` for status/UI polling |
+
+---
+
+## Differentiator Features
+
+StellarSend isn't just a wallet — these on-chain building blocks are what any plain Stellar wallet can't do. All four are implemented directly in the contracts in this repo (`stellar_send` for subscriptions/batch/requests, a new `escrow` crate for conditional transfers), with unit tests covering the happy path and at least one failure case each.
+
+### Scheduled & recurring payments
+
+`stellar_send/src/subscription.rs` — a payer authorizes a recurring transfer once; a keeper (anyone, including an unprivileged bot) can then trigger each due payment without the payer being online.
+
+```rust
+create_subscription(env, payer, recipient, token, amount, interval_seconds, start_time) -> Result<u64, StellarSendError>
+cancel_subscription(env, id) -> Result<(), StellarSendError>
+execute_subscription(env, id) -> Result<i128, StellarSendError>
+get_subscription(env, id) -> Result<Subscription, StellarSendError>
+```
+
+The payer grants the contract a standard SEP-41 token allowance (`token.approve`) when creating the subscription; execution pulls funds via `transfer_from` rather than requiring the payer's live signature, which is what makes unattended, scheduled execution possible while staying non-custodial — the contract enforces the authorization, not a trusted backend. Re-execution before `next_execution_time` is rejected.
+
+### Split / batch payments
+
+`stellar_send/src/batch.rs` — one sender, many recipients, one call.
+
+```rust
+send_batch_payment(env, from, token, payments: Vec<(Address, i128)>) -> Result<Vec<PaymentRecord>, StellarSendError>
+```
+
+Reuses the same fee-splitting logic as `send_payment`. Batches are **all-or-nothing**: every leg is validated up front, and since a Soroban host transaction is atomic, any transfer failure reverts the whole call — there's no partial batch state to reconcile.
+
+### Payment requests / invoicing
+
+`stellar_send/src/payment_request.rs` — turns StellarSend into a two-sided payment tool: a requester creates a shareable "invoice," and a payer fulfills it.
+
+```rust
+create_payment_request(env, requester, payer: Option<Address>, token, amount, memo, expiry) -> Result<u64, StellarSendError>
+fulfill_payment_request(env, request_id, payer) -> Result<i128, StellarSendError>
+cancel_payment_request(env, request_id) -> Result<(), StellarSendError>
+get_payment_request(env, request_id) -> Result<PaymentRequest, StellarSendError>
+```
+
+`payer` is optional — `None` means anyone can fulfill it. Expired or already-fulfilled/cancelled requests are rejected; the protocol fee is deducted exactly as in `send_payment`.
+
+### Escrow / conditional transfers
+
+`escrow/src/lib.rs` — funds locked in-contract until a time or arbiter condition releases them.
+
+```rust
+create_escrow(env, depositor, beneficiary, token, amount, unlock_time, arbiter: Option<Address>) -> Result<u64, EscrowError>
+release_escrow(env, escrow_id, caller) -> Result<(), EscrowError>
+refund_escrow(env, escrow_id, caller) -> Result<(), EscrowError>
+get_escrow(env, escrow_id) -> Result<Escrow, EscrowError>
+```
+
+`caller` must authorize the call itself (`caller.require_auth()`) — the beneficiary can release after `unlock_time`, and an optional arbiter can release **or** refund at any time. The depositor can only self-refund after `unlock_time` plus a one-week grace period, so the beneficiary always gets a fair window to claim before the depositor can walk away with the funds.
+
+> **Note on automation:** because release/refund require the caller's own signature, they can't be executed by an unattended keeper the way subscriptions can — unless the keeper *is* the configured arbiter. The [backend](https://github.com/StellarSend/backend)'s escrow endpoints build an unsigned transaction for whichever party is acting to sign client-side, the same pattern used for a regular payment.
 
 ---
 
