@@ -22,10 +22,15 @@
 
 #![no_std]
 
+mod batch;
 mod error;
 mod events;
+mod payment_request;
+mod subscription;
 
 pub use error::StellarSendError;
+pub use payment_request::{PaymentRequest, PaymentRequestStatus};
+pub use subscription::Subscription;
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token, vec, Address, Env, String, Symbol,
@@ -38,6 +43,16 @@ use soroban_sdk::{
 
 const KEY_CONFIG: Symbol = symbol_short!("CONFIG");
 const KEY_SEQ: Symbol = symbol_short!("SEQ");
+
+/// Global counter for subscription ids (instance storage).
+const KEY_SUB_SEQ: Symbol = symbol_short!("SUBSEQ");
+/// Persistent key prefix: (KEY_SUB, id) → Subscription.
+const KEY_SUB: Symbol = symbol_short!("SUB");
+
+/// Global counter for payment-request ids (instance storage).
+const KEY_REQ_SEQ: Symbol = symbol_short!("REQSEQ");
+/// Persistent key prefix: (KEY_REQ, id) → PaymentRequest.
+const KEY_REQ: Symbol = symbol_short!("REQ");
 
 // ---------------------------------------------------------------------------
 // Data types

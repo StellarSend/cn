@@ -6,12 +6,15 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger as _},
     token::{Client as TokenClient, StellarAssetClient},
     vec, Address, Env, String,
 };
 
-use crate::{ContractConfig, StellarSendContract, StellarSendContractClient, StellarSendError};
+use crate::{
+    ContractConfig, PaymentRequestStatus, StellarSendContract, StellarSendContractClient,
+    StellarSendError,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -359,4 +362,242 @@ fn test_unauthorized_send_rejected() {
         result.is_err(),
         "send_payment must fail when victim has not authorised the call"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_subscription_create_and_execute() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &100u32, &fee_collector); // 1 %
+
+    let payer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    mint(&env, &token, &token_admin, &payer, 10_000);
+
+    // Payer pre-authorises the contract to pull funds on its behalf.
+    let token_client = TokenClient::new(&env, &token);
+    token_client.approve(&payer, &client.address, &10_000i128, &(env.ledger().sequence() + 1_000));
+
+    let start = env.ledger().timestamp();
+    let id = client.create_subscription(&payer, &recipient, &token, &1_000i128, &600u64, &start);
+
+    // Due immediately (start_time == now) → executes.
+    let net = client.execute_subscription(&id);
+    assert_eq!(net, 990); // 1 000 - 1% fee
+
+    let sub = client.get_subscription(&id);
+    assert_eq!(sub.next_execution_time, start + 600);
+
+    assert_eq!(token_client.balance(&recipient), 990);
+    assert_eq!(token_client.balance(&fee_collector), 10);
+}
+
+#[test]
+fn test_subscription_execute_before_due_fails() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    let payer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    mint(&env, &token, &token_admin, &payer, 10_000);
+
+    let token_client = TokenClient::new(&env, &token);
+    token_client.approve(&payer, &client.address, &10_000i128, &(env.ledger().sequence() + 1_000));
+
+    // start_time far in the future → not due yet.
+    let start = env.ledger().timestamp() + 10_000;
+    let id = client.create_subscription(&payer, &recipient, &token, &1_000i128, &600u64, &start);
+
+    let result = client.try_execute_subscription(&id);
+    assert_eq!(result, Err(Ok(StellarSendError::SubscriptionNotDue)));
+}
+
+#[test]
+fn test_subscription_cancel_then_execute_fails() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    let payer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    mint(&env, &token, &token_admin, &payer, 10_000);
+
+    let token_client = TokenClient::new(&env, &token);
+    token_client.approve(&payer, &client.address, &10_000i128, &(env.ledger().sequence() + 1_000));
+
+    let start = env.ledger().timestamp();
+    let id = client.create_subscription(&payer, &recipient, &token, &1_000i128, &600u64, &start);
+
+    client.cancel_subscription(&id);
+
+    let result = client.try_execute_subscription(&id);
+    assert_eq!(result, Err(Ok(StellarSendError::SubscriptionInactive)));
+}
+
+// ---------------------------------------------------------------------------
+// Batch payments
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_batch_payment_happy_path() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &100u32, &fee_collector); // 1 %
+
+    let sender = Address::generate(&env);
+    let r1 = Address::generate(&env);
+    let r2 = Address::generate(&env);
+    mint(&env, &token, &token_admin, &sender, 10_000);
+
+    let payments = vec![&env, (r1.clone(), 1_000i128), (r2.clone(), 2_000i128)];
+    let records = client.send_batch_payment(&sender, &token, &payments);
+
+    assert_eq!(records.len(), 2);
+    assert_eq!(records.get(0).unwrap().net_amount, 990);
+    assert_eq!(records.get(1).unwrap().net_amount, 1_980);
+
+    let token_client = TokenClient::new(&env, &token);
+    assert_eq!(token_client.balance(&r1), 990);
+    assert_eq!(token_client.balance(&r2), 1_980);
+    assert_eq!(token_client.balance(&fee_collector), 30);
+    assert_eq!(token_client.balance(&sender), 7_000);
+}
+
+#[test]
+fn test_batch_payment_empty_fails() {
+    let (env, client, admin, fee_collector, token, _token_admin) = setup();
+    client.initialize(&admin, &100u32, &fee_collector);
+
+    let sender = Address::generate(&env);
+    let result = client.try_send_batch_payment(&sender, &token, &vec![&env]);
+    assert_eq!(result, Err(Ok(StellarSendError::EmptyBatch)));
+}
+
+#[test]
+fn test_batch_payment_reverts_atomically_on_bad_leg() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    let sender = Address::generate(&env);
+    let r1 = Address::generate(&env);
+    mint(&env, &token, &token_admin, &sender, 1_000);
+
+    // Second leg has an invalid (zero) amount — whole batch must be rejected
+    // and no balance should move, even for the valid first leg.
+    let payments = vec![&env, (r1.clone(), 500i128), (r1.clone(), 0i128)];
+    let result = client.try_send_batch_payment(&sender, &token, &payments);
+    assert_eq!(result, Err(Ok(StellarSendError::InvalidAmount)));
+
+    let token_client = TokenClient::new(&env, &token);
+    assert_eq!(token_client.balance(&sender), 1_000);
+    assert_eq!(token_client.balance(&r1), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Payment requests / invoicing
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_payment_request_create_and_fulfill() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &100u32, &fee_collector); // 1 %
+
+    let requester = Address::generate(&env);
+    let payer = Address::generate(&env);
+    mint(&env, &token, &token_admin, &payer, 10_000);
+
+    let expiry = env.ledger().timestamp() + 1_000;
+    let id = client.create_payment_request(
+        &requester,
+        &None,
+        &token,
+        &1_000i128,
+        &String::from_str(&env, "invoice #1"),
+        &expiry,
+    );
+
+    let net = client.fulfill_payment_request(&id, &payer);
+    assert_eq!(net, 990);
+
+    let request = client.get_payment_request(&id);
+    assert_eq!(request.status, PaymentRequestStatus::Fulfilled);
+
+    let token_client = TokenClient::new(&env, &token);
+    assert_eq!(token_client.balance(&requester), 990);
+    assert_eq!(token_client.balance(&fee_collector), 10);
+}
+
+#[test]
+fn test_payment_request_expired_fulfill_fails() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    let requester = Address::generate(&env);
+    let payer = Address::generate(&env);
+    mint(&env, &token, &token_admin, &payer, 10_000);
+
+    let expiry = env.ledger().timestamp() + 100;
+    let id = client.create_payment_request(
+        &requester,
+        &None,
+        &token,
+        &1_000i128,
+        &String::from_str(&env, "invoice #2"),
+        &expiry,
+    );
+
+    env.ledger().set_timestamp(expiry + 1);
+
+    let result = client.try_fulfill_payment_request(&id, &payer);
+    assert_eq!(result, Err(Ok(StellarSendError::RequestExpired)));
+}
+
+#[test]
+fn test_payment_request_wrong_payer_rejected() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    let requester = Address::generate(&env);
+    let designated_payer = Address::generate(&env);
+    let other_payer = Address::generate(&env);
+    mint(&env, &token, &token_admin, &other_payer, 10_000);
+
+    let expiry = env.ledger().timestamp() + 1_000;
+    let id = client.create_payment_request(
+        &requester,
+        &Some(designated_payer),
+        &token,
+        &1_000i128,
+        &String::from_str(&env, "invoice #3"),
+        &expiry,
+    );
+
+    let result = client.try_fulfill_payment_request(&id, &other_payer);
+    assert_eq!(result, Err(Ok(StellarSendError::WrongPayer)));
+}
+
+#[test]
+fn test_payment_request_cancel_then_fulfill_fails() {
+    let (env, client, admin, fee_collector, token, token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    let requester = Address::generate(&env);
+    let payer = Address::generate(&env);
+    mint(&env, &token, &token_admin, &payer, 10_000);
+
+    let expiry = env.ledger().timestamp() + 1_000;
+    let id = client.create_payment_request(
+        &requester,
+        &None,
+        &token,
+        &1_000i128,
+        &String::from_str(&env, "invoice #4"),
+        &expiry,
+    );
+
+    client.cancel_payment_request(&id);
+
+    let result = client.try_fulfill_payment_request(&id, &payer);
+    assert_eq!(result, Err(Ok(StellarSendError::RequestCancelled)));
 }

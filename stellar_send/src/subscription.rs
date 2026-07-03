@@ -1,0 +1,187 @@
+//! Scheduled & recurring payments ("subscriptions").
+//!
+//! A payer creates a subscription describing a recipient, token, amount and
+//! interval (in ledger-seconds).  Execution is *pull*-based: the payer must
+//! grant this contract a token allowance (SEP-41 `approve`) large enough to
+//! cover the payments it wants executed, since `execute_subscription` is
+//! designed to be called by an untrusted keeper/cron job with no interactive
+//! signature from the payer at execution time.  We therefore move funds with
+//! `transfer_from` rather than `transfer`, exactly like a card-network
+//! "pull" recurring charge.
+//!
+//! Storage
+//! ───────
+//! Instance:
+//!   KEY_SUB_SEQ → u64 (global subscription id counter)
+//! Persistent:
+//!   (KEY_SUB, id) → Subscription
+
+use soroban_sdk::{contractimpl, contracttype, token, Address, Env};
+
+use crate::{
+    StellarSendContract, StellarSendContractClient, StellarSendError, KEY_SUB, KEY_SUB_SEQ,
+};
+
+/// A recurring payment authorised by `payer`.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Subscription {
+    pub payer: Address,
+    pub recipient: Address,
+    pub token: Address,
+    /// Gross amount transferred on every execution (fee is deducted from this).
+    pub amount: i128,
+    /// Minimum number of seconds between two consecutive executions.
+    pub interval_seconds: u64,
+    /// Unix timestamp (ledger time) at which the subscription may next run.
+    pub next_execution_time: u64,
+    /// False once cancelled by the payer; a cancelled subscription can never
+    /// be re-activated (a new one must be created instead).
+    pub active: bool,
+}
+
+#[contractimpl]
+impl StellarSendContract {
+    /// Create a recurring payment.  `start_time` is the timestamp of the
+    /// first allowed execution (may be in the past to allow immediate
+    /// execution, or in the future to delay the first charge).
+    ///
+    /// The payer must separately call `token.approve(payer, <this contract>,
+    /// amount * N, expiration_ledger)` on the token contract so that future
+    /// `execute_subscription` calls (which run without the payer's live
+    /// signature) are authorised to move funds via `transfer_from`.
+    ///
+    /// Returns the new subscription id.
+    pub fn create_subscription(
+        env: Env,
+        payer: Address,
+        recipient: Address,
+        token: Address,
+        amount: i128,
+        interval_seconds: u64,
+        start_time: u64,
+    ) -> Result<u64, StellarSendError> {
+        payer.require_auth();
+
+        if amount <= 0 {
+            return Err(StellarSendError::InvalidAmount);
+        }
+        if interval_seconds == 0 {
+            return Err(StellarSendError::InvalidInterval);
+        }
+        if payer == recipient {
+            return Err(StellarSendError::SelfPaymentNotAllowed);
+        }
+
+        let id = Self::next_sub_id(&env);
+        let sub = Subscription {
+            payer: payer.clone(),
+            recipient: recipient.clone(),
+            token: token.clone(),
+            amount,
+            interval_seconds,
+            next_execution_time: start_time,
+            active: true,
+        };
+
+        env.storage().persistent().set(&(KEY_SUB, id), &sub);
+
+        crate::events::emit_subscription_created(
+            &env,
+            id,
+            &payer,
+            &recipient,
+            &token,
+            amount,
+            interval_seconds,
+            start_time,
+        );
+
+        Ok(id)
+    }
+
+    /// Cancel a subscription.  Only the payer may cancel.  Idempotent calls
+    /// on an already-cancelled subscription return `SubscriptionInactive`.
+    pub fn cancel_subscription(env: Env, id: u64) -> Result<(), StellarSendError> {
+        let mut sub = Self::load_subscription(&env, id)?;
+        sub.payer.require_auth();
+
+        if !sub.active {
+            return Err(StellarSendError::SubscriptionInactive);
+        }
+
+        sub.active = false;
+        env.storage().persistent().set(&(KEY_SUB, id), &sub);
+
+        crate::events::emit_subscription_cancelled(&env, id, &sub.payer);
+        Ok(())
+    }
+
+    /// Execute a due subscription.  Callable by anyone (a keeper), because
+    /// the payer already pre-authorised the token allowance at creation
+    /// time.  Fails with `SubscriptionNotDue` if `next_execution_time` has
+    /// not yet been reached, guarding against double-execution within a
+    /// single interval.
+    pub fn execute_subscription(env: Env, id: u64) -> Result<i128, StellarSendError> {
+        let mut sub = Self::load_subscription(&env, id)?;
+
+        if !sub.active {
+            return Err(StellarSendError::SubscriptionInactive);
+        }
+
+        let now = env.ledger().timestamp();
+        if now < sub.next_execution_time {
+            return Err(StellarSendError::SubscriptionNotDue);
+        }
+
+        let config = Self::load_config(&env)?;
+        let (fee_amount, net_amount) = Self::split_fee(sub.amount, config.fee_bps)?;
+
+        let token_client = token::Client::new(&env, &sub.token);
+        let spender = env.current_contract_address();
+
+        if fee_amount > 0 {
+            token_client.transfer_from(&spender, &sub.payer, &config.fee_collector, &fee_amount);
+        }
+        token_client.transfer_from(&spender, &sub.payer, &sub.recipient, &net_amount);
+
+        // Advance the schedule by exactly one interval (not "now + interval")
+        // so a late keeper call doesn't silently drift the cadence forward.
+        sub.next_execution_time = sub
+            .next_execution_time
+            .checked_add(sub.interval_seconds)
+            .ok_or(StellarSendError::ArithmeticOverflow)?;
+        env.storage().persistent().set(&(KEY_SUB, id), &sub);
+
+        crate::events::emit_subscription_executed(
+            &env,
+            id,
+            &sub.payer,
+            &sub.recipient,
+            net_amount,
+            fee_amount,
+            sub.next_execution_time,
+        );
+
+        Ok(net_amount)
+    }
+
+    /// Fetch a subscription by id.
+    pub fn get_subscription(env: Env, id: u64) -> Result<Subscription, StellarSendError> {
+        Self::load_subscription(&env, id)
+    }
+
+    fn load_subscription(env: &Env, id: u64) -> Result<Subscription, StellarSendError> {
+        env.storage()
+            .persistent()
+            .get(&(KEY_SUB, id))
+            .ok_or(StellarSendError::SubscriptionNotFound)
+    }
+
+    fn next_sub_id(env: &Env) -> u64 {
+        let seq: u64 = env.storage().instance().get(&KEY_SUB_SEQ).unwrap_or(0u64);
+        let next = seq.wrapping_add(1);
+        env.storage().instance().set(&KEY_SUB_SEQ, &next);
+        next
+    }
+}

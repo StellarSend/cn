@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "stellar_send",
+    "fee_collector",
+    "token_bridge",
+    "escrow",
+]
+
+[workspace.dependencies]
+soroban-sdk = { version = "21.0.0" }

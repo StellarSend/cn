@@ -25,4 +25,35 @@ pub enum StellarSendError {
     ArithmeticOverflow = 9,
     /// The fee-collector address stored in config is invalid.
     InvalidFeeCollector = 10,
+
+    // -- Subscriptions --------------------------------------------------
+    /// The subscription id does not exist.
+    SubscriptionNotFound = 11,
+    /// The subscription has already been cancelled.
+    SubscriptionInactive = 12,
+    /// `execute_subscription` was called before `next_execution_time`.
+    SubscriptionNotDue = 13,
+    /// The interval between recurring executions must be positive.
+    InvalidInterval = 14,
+    /// A recurring/self payment was attempted (payer == recipient).
+    SelfPaymentNotAllowed = 15,
+
+    // -- Batch payments ---------------------------------------------------
+    /// A batch payment call contained no payment legs.
+    EmptyBatch = 16,
+
+    // -- Payment requests -------------------------------------------------
+    /// The payment request id does not exist.
+    RequestNotFound = 17,
+    /// The payment request has already been fulfilled.
+    RequestAlreadyFulfilled = 18,
+    /// The payment request has been cancelled by the requester.
+    RequestCancelled = 19,
+    /// The payment request's expiry ledger timestamp has passed.
+    RequestExpired = 20,
+    /// `expiry` must be a timestamp in the future.
+    InvalidExpiry = 21,
+    /// The request restricts payment to a specific payer and the caller
+    /// does not match it.
+    WrongPayer = 22,
 }
