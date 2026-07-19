@@ -106,7 +106,9 @@ pub fn emit_subscription_cancelled(env: &Env, id: u64, payer: &Address) {
 }
 
 /// Topics : ["sub_exec", payer, recipient]
-/// Data   : (id, net_amount, fee_amount, next_execution_time)
+/// Data   : (id, net_amount, fee_amount, next_execution_time,
+///           executions_count, still_active)
+#[allow(clippy::too_many_arguments)]
 pub fn emit_subscription_executed(
     env: &Env,
     id: u64,
@@ -115,9 +117,18 @@ pub fn emit_subscription_executed(
     net_amount: i128,
     fee_amount: i128,
     next_execution_time: u64,
+    executions_count: u32,
+    still_active: bool,
 ) {
     let topics = (symbol_short!("sub_exec"), payer.clone(), recipient.clone());
-    let data = (id, net_amount, fee_amount, next_execution_time);
+    let data = (
+        id,
+        net_amount,
+        fee_amount,
+        next_execution_time,
+        executions_count,
+        still_active,
+    );
     env.events().publish(topics, data);
 }
 

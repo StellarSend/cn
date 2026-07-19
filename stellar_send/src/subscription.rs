@@ -265,6 +265,8 @@ impl StellarSendContract {
             net_amount,
             fee_amount,
             sub.next_execution_time,
+            sub.executions_count,
+            sub.active,
         );
 
         Ok(net_amount)
