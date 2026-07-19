@@ -70,7 +70,9 @@ pub fn emit_fee_updated(env: &Env, old_fee_bps: u32, new_fee_bps: u32) {
 // ---------------------------------------------------------------------------
 
 /// Topics : ["sub_new", payer, recipient]
-/// Data   : (id, token, amount, interval_seconds, next_execution_time)
+/// Data   : (id, token, amount, interval_seconds, next_execution_time,
+///           max_executions, expiry_time)
+#[allow(clippy::too_many_arguments)]
 pub fn emit_subscription_created(
     env: &Env,
     id: u64,
@@ -80,9 +82,19 @@ pub fn emit_subscription_created(
     amount: i128,
     interval_seconds: u64,
     next_execution_time: u64,
+    max_executions: Option<u32>,
+    expiry_time: Option<u64>,
 ) {
     let topics = (symbol_short!("sub_new"), payer.clone(), recipient.clone());
-    let data = (id, token.clone(), amount, interval_seconds, next_execution_time);
+    let data = (
+        id,
+        token.clone(),
+        amount,
+        interval_seconds,
+        next_execution_time,
+        max_executions,
+        expiry_time,
+    );
     env.events().publish(topics, data);
 }
 

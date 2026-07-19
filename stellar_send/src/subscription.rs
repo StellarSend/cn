@@ -173,6 +173,8 @@ impl StellarSendContract {
             amount,
             interval_seconds,
             start_time,
+            max_executions,
+            expiry_time,
         );
 
         Ok(id)
