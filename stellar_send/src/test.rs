@@ -328,8 +328,11 @@ fn test_get_payment_record() {
 
     // Sequence starts at 1 after the first payment.
     let record = client.get_payment_record(&sender, &1u64);
+    assert_eq!(record.from, sender);
+    assert_eq!(record.to, recipient);
     assert_eq!(record.net_amount, 1_000);
     assert_eq!(record.fee_amount, 0);
+    assert_eq!(record.memo, String::from_str(&env, "audit me"));
 }
 
 #[test]
