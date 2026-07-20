@@ -349,6 +349,16 @@ fn test_get_payment_record_not_found() {
 }
 
 #[test]
+fn test_get_payment_record_uninitialized_contract() {
+    let (env, client, _admin, _fee_collector, _token, _token_admin) = setup();
+    // Deliberately skip client.initialize(..) so the contract has no config.
+
+    let sender = Address::generate(&env);
+    let result = client.try_get_payment_record(&sender, &1u64);
+    assert_eq!(result, Err(Ok(StellarSendError::NotInitialized)));
+}
+
+#[test]
 fn test_unauthorized_send_rejected() {
     // Verify that send_payment correctly requires the sender's authorisation.
     // We mock only the attacker's auth (not the victim's) and confirm that
