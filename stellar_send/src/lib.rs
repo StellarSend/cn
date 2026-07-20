@@ -346,6 +346,8 @@ impl StellarSendContract {
         from: Address,
         seq: u64,
     ) -> Result<PaymentRecord, StellarSendError> {
+        Self::load_config(&env)?;
+
         let key = (from, seq);
         env.storage()
             .persistent()
