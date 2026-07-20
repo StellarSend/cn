@@ -328,8 +328,34 @@ fn test_get_payment_record() {
 
     // Sequence starts at 1 after the first payment.
     let record = client.get_payment_record(&sender, &1u64);
+    assert_eq!(record.from, sender);
+    assert_eq!(record.to, recipient);
     assert_eq!(record.net_amount, 1_000);
     assert_eq!(record.fee_amount, 0);
+    assert_eq!(record.memo, String::from_str(&env, "audit me"));
+}
+
+#[test]
+fn test_get_payment_record_not_found() {
+    let (env, client, admin, fee_collector, _token, _token_admin) = setup();
+    client.initialize(&admin, &0u32, &fee_collector);
+
+    // Contract is initialized, but no payment has ever been recorded for
+    // this sender/sequence pair — must be reported as PaymentRecordNotFound,
+    // not conflated with an uninitialized contract.
+    let missing_sender = Address::generate(&env);
+    let result = client.try_get_payment_record(&missing_sender, &1u64);
+    assert_eq!(result, Err(Ok(StellarSendError::PaymentRecordNotFound)));
+}
+
+#[test]
+fn test_get_payment_record_uninitialized_contract() {
+    let (env, client, _admin, _fee_collector, _token, _token_admin) = setup();
+    // Deliberately skip client.initialize(..) so the contract has no config.
+
+    let sender = Address::generate(&env);
+    let result = client.try_get_payment_record(&sender, &1u64);
+    assert_eq!(result, Err(Ok(StellarSendError::NotInitialized)));
 }
 
 #[test]
